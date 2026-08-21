@@ -26,26 +26,3 @@
 | 8 | DPM235480 | **Diệp Hoàng Thành** | QA / Security & Data Specialist |
 | 9 | DPM235506 | **Trần Thị Phương Dung** | QA / Security & Data Specialist |
 
----
-
-## 3. Cấu trúc Repository
-
-```text
-CNPM.Nhom04/
-│
-├── README.md
-│
-├── 01_Requirements/
-│   ├── BienBanHopNhom.md
-│   └── UserStories.md
-│
-├── 02_Design/
-│   └── API_Contract.md
-│
-├── 03_SourceCode/
-│
-├── 04_Infrastructure/
-│
-├── 05_Testing/
-│
-└── 06_Documentation/
