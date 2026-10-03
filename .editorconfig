@@ -1,0 +1,23 @@
+# Đánh dấu đây là file cấu hình gốc, các IDE không cần tìm kiếm file .editorconfig ở thư mục cha nữa.
+root = true
+
+# Cấu hình mặc định cho TẤT CẢ các loại file (*)
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Cấu hình riêng cho các file Markdown (.md) (ví dụ file README)
+[*.md]
+trim_trailing_whitespace = false
+
+# Cấu hình riêng cho file Docker (giữ chuẩn thụt lề 4 space nếu thích, nhưng thường 2 vẫn ok, ở đây tôi set 2 cho đồng bộ)
+[Dockerfile]
+indent_size = 2
+
+# Đảm bảo các script chạy trên Linux/Docker không bị lỗi do ký tự xuống dòng của Windows
+[*.{sh,bash}]
+end_of_line = lf
