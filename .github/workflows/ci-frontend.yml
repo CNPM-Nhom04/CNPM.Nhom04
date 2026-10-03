@@ -35,12 +35,12 @@ jobs:
 
     # --- KHI NÀO TEAM BẮT ĐẦU CODE THÌ BỎ COMMENT (#) CÁC DÒNG DƯỚI ĐÂY ---
 
-    # - name: Cài đặt thư viện
-    #   run: npm install
+    - name: Cài đặt thư viện
+      run: npm install
 
-    # - name: Chạy Lint (nếu có)
-    #   run: npm run lint
-    #   continue-on-error: true
+    - name: Chạy Lint (nếu có)
+      run: npm run lint
+      continue-on-error: true
 
-    # - name: Build ứng dụng Frontend
-    #   run: npm run build
+    - name: Build ứng dụng Frontend
+      run: npm run build

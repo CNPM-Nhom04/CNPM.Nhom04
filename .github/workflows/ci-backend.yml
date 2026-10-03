@@ -35,14 +35,16 @@ jobs:
 
     # --- KHI NÀO TEAM BẮT ĐẦU CODE THÌ BỎ COMMENT (#) CÁC DÒNG DƯỚI ĐÂY ---
 
-    # - name: Cài đặt các thư viện
-    #   run: npm install
+    - name: Cài đặt các thư viện
+      run: npm install
 
-    # - name: Kiểm tra lỗi cú pháp (Lint)
-    #   run: npm run lint
+    - name: Kiểm tra lỗi cú pháp (Lint)
+      run: npm run lint
+      continue-on-error: true
 
-    # - name: Chạy Unit Test
-    #   run: npm run test
+    - name: Chạy Unit Test
+      run: npm run test
+      continue-on-error: true
 
-    # - name: Build ứng dụng
-    #   run: npm run build
+    - name: Build ứng dụng
+      run: npm run build
