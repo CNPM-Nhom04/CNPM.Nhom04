@@ -15,6 +15,8 @@ import {
   Sliders,
   Users,
   History,
+  Award,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +32,7 @@ const menuGroups = [
     items: [
       {
         name: "Danh mục Học phần",
-        href: "/dashboard/hoc-phan",
+        href: "/dashboard/danh-muc-hoc-phan",
         icon: BookOpen,
       },
       {
@@ -47,6 +49,16 @@ const menuGroups = [
         name: "So sánh 2 CTĐT",
         href: "/dashboard/so-sanh",
         icon: GitCompare,
+      },
+      {
+        name: "Quản lý Đề tài & GVHD",
+        href: "/dashboard/de-tai-luan-van",
+        icon: FileText,
+      },
+      {
+        name: "Bảo vệ Luận văn / Luận án",
+        href: "/dashboard/bao-ve-luan-van",
+        icon: Award,
       },
     ],
   },
@@ -67,6 +79,16 @@ const menuGroups = [
         name: "Tra cứu & Báo cáo Excel",
         href: "/dashboard/bao-cao",
         icon: FileSpreadsheet,
+      },
+      {
+        name: "Quản lý điểm số",
+        href: "/dashboard/quan-ly-diem",
+        icon: FileSpreadsheet,
+      },
+      {
+        name: "Xét tốt nghiệp & Cấp bằng",
+        href: "/dashboard/xet-tot-nghiep",
+        icon: Award,
       },
     ],
   },
