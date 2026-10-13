@@ -1,4 +1,24 @@
-export default function DashboardPage() {
+import { prisma } from "@/lib/db";
+
+export default async function DashboardPage() {
+  // Lấy số liệu thực tế từ cơ sở dữ liệu
+  let courseCount = 0;
+  let programCount = 0;
+  let activeTerm: any = null;
+
+  try {
+    [courseCount, programCount, activeTerm] = await Promise.all([
+      prisma.courses.count(),
+      prisma.training_programs.count(),
+      prisma.academic_terms.findFirst({
+        where: { status: "ACTIVE" },
+        orderBy: { id: "desc" },
+      }),
+    ]);
+  } catch (error) {
+    console.error("Lỗi khi tải dữ liệu dashboard:", error);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -13,27 +33,37 @@ export default function DashboardPage() {
           <div className="text-xs font-semibold text-slate-500 uppercase">
             Học phần đang quản lý
           </div>
-          <div className="text-3xl font-bold text-slate-900 mt-2">128</div>
+          <div className="text-3xl font-bold text-slate-900 mt-2">
+            {courseCount}
+          </div>
           <div className="text-xs text-green-600 mt-1 font-medium">
-            Đã số hóa đề cương chi tiết
+            Đã đồng bộ từ cơ sở dữ liệu
           </div>
         </div>
+
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">
-            Chương trình Thạc sĩ / Tiến sĩ
+            Chương trình Đào tạo
           </div>
-          <div className="text-3xl font-bold text-slate-900 mt-2">12</div>
+          <div className="text-3xl font-bold text-slate-900 mt-2">
+            {programCount}
+          </div>
           <div className="text-xs text-blue-600 mt-1 font-medium">
-            Có 2 CTĐT đang chờ xét duyệt
+            Tổng số chương trình hiện có
           </div>
         </div>
+
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">
             Đợt đăng ký học phần
           </div>
-          <div className="text-3xl font-bold text-slate-900 mt-2">Đang mở</div>
+          <div className="text-3xl font-bold text-slate-900 mt-2">
+            {activeTerm ? "Đang mở" : "Tạm đóng"}
+          </div>
           <div className="text-xs text-orange-600 mt-1 font-medium">
-            Học kỳ 1 / 2026-2027
+            {activeTerm
+              ? `${activeTerm.semester} / ${activeTerm.academic_year}`
+              : "Không có học kỳ active"}
           </div>
         </div>
       </div>

@@ -109,10 +109,12 @@ export default function DanhSachCTDTPage() {
             Quản lý phiên bản, cấu trúc tín chỉ và xét duyệt CTĐT
           </p>
         </div>
-        <Button className="w-fit">
-          <Plus className="h-4 w-4 mr-1.5" />
-          Khởi tạo CTĐT Mới
-        </Button>
+        <Link href="/dashboard/chuong-trinh-dao-tao/tao-moi">
+          <Button className="w-fit">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Khởi tạo CTĐT Mới
+          </Button>
+        </Link>
       </div>
 
       {/* Thanh lọc & Tìm kiếm */}
