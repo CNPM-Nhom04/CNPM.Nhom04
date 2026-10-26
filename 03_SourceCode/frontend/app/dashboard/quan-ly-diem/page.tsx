@@ -6,10 +6,6 @@ import {
   Search,
   Plus,
   Edit3,
-  CheckCircle2,
-  AlertCircle,
-  BookOpen,
-  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";

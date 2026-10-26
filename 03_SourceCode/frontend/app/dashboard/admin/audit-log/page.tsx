@@ -4,14 +4,9 @@ import { useState } from "react";
 import {
   History,
   Search,
-  ShieldCheck,
-  User,
-  Calendar,
-  FileText,
-  Filter,
   Download,
 } from "lucide-react";
-import { Button, Input, Select, Badge } from "@/components/ui";
+import { Button } from "@/components/ui";
 
 interface AuditLogItem {
   id: string;

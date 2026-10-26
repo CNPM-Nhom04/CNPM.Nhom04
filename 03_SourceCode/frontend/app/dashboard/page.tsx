@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/db";
+import type { academic_terms } from "@prisma/client";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   // Lấy số liệu thực tế từ cơ sở dữ liệu
   let courseCount = 0;
   let programCount = 0;
-  let activeTerm: any = null;
+  let activeTerm: academic_terms | null = null;
 
   try {
     [courseCount, programCount, activeTerm] = await Promise.all([

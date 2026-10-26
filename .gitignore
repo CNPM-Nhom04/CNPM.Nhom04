@@ -27,6 +27,7 @@ out/
 build/
 # - File cache
 .cache/
+.cahe
 .swc/
 .npm/
 .eslintcache

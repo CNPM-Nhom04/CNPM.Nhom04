@@ -4,13 +4,25 @@ import { useState } from "react";
 import { GitCompare, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui";
 
+type ProgramSummary = {
+  ma: string;
+  ten: string;
+  khoa: string;
+  khoaTuyenSinh: string;
+  tongTinChi: number;
+  chuanNgoaiNgu: string;
+  hinhThuc: string;
+  soHocPhan: number;
+  trangThai: string;
+};
+
 export default function SoSanhCTDTPage() {
   // Trạng thái chọn 2 chương trình để so sánh
   const [ctdtA, setCtdtA] = useState("MS-KHMT-2026");
   const [ctdtB, setCtdtB] = useState("MS-CNPM-2026");
 
   // Dữ liệu mẫu mô phỏng thông tin 2 CTĐT được chọn
-  const dataMap: Record<string, any> = {
+  const dataMap: Record<string, ProgramSummary> = {
     "MS-KHMT-2026": {
       ma: "MS-KHMT-2026",
       ten: "Thạc sĩ Khoa học Máy tính",
@@ -106,7 +118,7 @@ export default function SoSanhCTDTPage() {
     ]);
 
     // Thêm BOM (\uFEFF) để Excel hiển thị đúng tiếng Việt không bị lỗi font
-    let csvContent =
+    const csvContent =
       "\uFEFF" +
       [
         headers.join(","),

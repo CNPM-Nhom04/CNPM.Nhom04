@@ -5,14 +5,9 @@ import Link from "next/link";
 import {
   CheckSquare,
   Search,
-  Filter,
-  Layers,
   ArrowRight,
-  Clock,
-  CheckCircle2,
-  XCircle,
 } from "lucide-react";
-import { Button, Input, Select, Badge } from "@/components/ui";
+import { Button, Badge } from "@/components/ui";
 
 interface XetDuyetItem {
   id: string;

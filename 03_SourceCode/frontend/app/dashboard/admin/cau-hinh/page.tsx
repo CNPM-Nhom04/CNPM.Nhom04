@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Shield,
   Settings,
-  CheckCircle2,
 } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 
