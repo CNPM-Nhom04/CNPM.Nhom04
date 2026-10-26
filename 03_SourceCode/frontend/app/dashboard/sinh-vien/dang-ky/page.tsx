@@ -2,13 +2,8 @@
 
 import { useState } from "react";
 import {
-  UserCheck,
   BookOpen,
-  CheckCircle2,
-  Plus,
-  Trash2,
   Send,
-  AlertCircle,
   GraduationCap,
 } from "lucide-react";
 import { Button, Badge } from "@/components/ui";

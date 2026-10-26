@@ -5,10 +5,6 @@ import {
   CalendarDays,
   Search,
   Plus,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  FileSpreadsheet,
   Lock,
   Unlock,
   Eye,
@@ -82,7 +78,7 @@ const MOCK_CLASSES: LopHocPhan[] = [
 ];
 
 export default function DangKyHocPhanPage() {
-  const [classList, setClassList] = useState<LopHocPhan[]>(MOCK_CLASSES);
+  const [classList] = useState<LopHocPhan[]>(MOCK_CLASSES);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
 

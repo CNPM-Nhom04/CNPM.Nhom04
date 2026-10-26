@@ -4,7 +4,7 @@ Tài liệu này quy định cách các thành viên trong dự án nộp code v
 ---
 
 ## 1️⃣ Luật Thép: Tuyệt đối không Push trực tiếp lên `main`
-Nhánh `main` là nơi chứa code hoàn chỉnh và ổn định nhất. Github đã được cấu hình khóa nhánh này lại. Bạn không thể gõ `git push origin main`.
+Nhánh `main` là nơi chứa code đã được kiểm tra và duyệt. Nhóm yêu cầu mọi thay đổi đi qua Pull Request; quản trị viên cần cấu hình branch protection/ruleset để GitHub thực thi quy định này, theo [hướng dẫn CI](ci-guide.md).
 Mọi tính năng mới, hoặc sửa lỗi đều phải được làm trên một nhánh riêng (Branch).
 
 ## 2️⃣ Quy Trình Code Tính Năng Mới (Mỗi ngày)
@@ -47,10 +47,11 @@ Sau khi đẩy code lên (Bước 4), code của bạn vẫn chỉ nằm ở nh�
 4. Bấm **Create pull request**.
 
 ### Bot Tự Động Kiểm Tra (CI)
-Ngay lúc này, Bot của Github Actions sẽ tự động lấy code của bạn đem đi quét lỗi (Lint) và chạy thử (Test).
-- ❌ **Màu đỏ (Failed):** Code có lỗi. Nút Merge bị khóa. Bạn phải mở VS Code lên sửa lỗi, gõ `git add`, `git commit` và `git push` lại. Bot sẽ tự động test lại.
-- ✅ **Màu xanh (Passed):** Code hoàn hảo. Báo cho Leader vào duyệt code.
+GitHub Actions chạy workflow duy nhất `ci.yml`, gồm hai check `Frontend`, `Backend` và check tổng `CI`. Các bước gồm lint, Prisma, TypeScript, unit test backend và build. Xem lệnh kiểm tra trên máy và cách cấu hình required check tại [hướng dẫn CI](ci-guide.md).
+
+- ❌ **Màu đỏ (Failed):** Mở log bước thất bại, sửa lỗi rồi commit và push lại nhánh PR. Workflow tự chạy lại. Khi `CI` đã được đặt làm required check, PR chỉ được merge sau khi check này thành công.
+- ✅ **Màu xanh (Passed):** Các bước CI hiện có đã thành công. Tiếp tục review và kiểm thử chức năng; CI chưa kiểm tra frontend unit test, tích hợp database, SMTP hoặc deploy.
 
 ### Duyệt Code (Review & Merge)
-Bất kỳ thành viên nào trong nhóm cũng có thể vào xem code của bạn. Nếu mọi thứ đúng chuẩn, Leader sẽ bấm nút **Merge pull request** để gộp code của bạn vào `main`.
+Bất kỳ thành viên nào trong nhóm cũng có thể xem code. Nếu rule yêu cầu approve, cần một thành viên khác có quyền Write duyệt PR. Khi check `CI` và các điều kiện bảo vệ nhánh đều đạt, người có quyền merge bấm **Merge pull request** để gộp code vào `main`.
 Chúc mừng! Bạn đã hoàn thành xuất sắc một chu trình phát triển phần mềm chuẩn quốc tế.

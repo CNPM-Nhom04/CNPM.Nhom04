@@ -6,8 +6,6 @@ import {
   ArrowLeft,
   Save,
   BookOpen,
-  GraduationCap,
-  FileText,
   Award,
   Clock,
 } from "lucide-react";

@@ -8,10 +8,7 @@ import {
   XCircle,
   Clock,
   ShieldCheck,
-  GraduationCap,
-  FileText,
   Eye,
-  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";

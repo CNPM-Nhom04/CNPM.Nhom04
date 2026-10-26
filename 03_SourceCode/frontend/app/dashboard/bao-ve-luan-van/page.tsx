@@ -5,8 +5,6 @@ import {
   Award,
   Search,
   Plus,
-  Calendar,
-  Users,
   CheckCircle2,
   Clock,
   Eye,

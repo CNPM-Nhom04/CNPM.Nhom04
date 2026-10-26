@@ -4,12 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Plus,
-  Search,
-  Filter,
   Layers,
-  Eye,
-  Edit3,
-  ArrowRight,
 } from "lucide-react";
 import { Button, Badge, Input, Select } from "@/components/ui";
 import { ChuongTrinhDaoTao, TrangThaiCTDT } from "@/types/ctdt";
