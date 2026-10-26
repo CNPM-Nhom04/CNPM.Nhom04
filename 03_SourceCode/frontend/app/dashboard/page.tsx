@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   let programCount = 0;
   let activeTerm: academic_terms | null = null;
 
-   try {
+  try {
     [courseCount, programCount, activeTerm] = await Promise.all([
       prisma.courses.count(),
       prisma.training_programs.count(),
