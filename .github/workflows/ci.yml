@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: 03_SourceCode/frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Schema validation/generation and build do not need a running database.
+      DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ctdt_ci
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: 03_SourceCode/frontend/package-lock.json
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Build production application
+        run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: 03_SourceCode/backend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate backend manifest and detect implementation
+        id: source
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          for (const name of ['lint', 'test', 'build']) {
+            assert.equal(typeof pkg.scripts?.[name], 'string', `Missing backend script: ${name}`);
+          }
+          const implemented = ['src', 'apps', 'libs', 'test', 'tsconfig.json', 'nest-cli.json']
+            .some(path => fs.existsSync(path));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `implemented=${implemented}\n`);
+          if (implemented) {
+            assert.ok(fs.existsSync('package-lock.json'), 'Commit backend/package-lock.json before running npm ci');
+          } else {
+            console.log('::warning::Backend contains only a scaffold; lint, tests and build are not available yet.');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              '### Backend coverage\nOnly package.json was validated. No backend source exists yet, so backend lint, tests and build were not run. Adding source/configuration enables the mandatory checks automatically.\n');
+          }
+          NODE
+
+      - name: Install dependencies from lockfile
+        if: steps.source.outputs.implemented == 'true'
+        run: npm ci
+
+      - name: Lint without changing source
+        if: steps.source.outputs.implemented == 'true'
+        run: npm run lint -- --no-fix
+
+      - name: Run unit tests
+        if: steps.source.outputs.implemented == 'true'
+        run: npm test -- --ci --runInBand
+
+      - name: Build backend
+        if: steps.source.outputs.implemented == 'true'
+        run: npm run build
+
+  ci:
+    # Keep this name stable: require the "CI" status check on main.
+    name: CI
+    if: ${{ always() }}
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to succeed
+        env:
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+        run: |
+          printf 'Frontend: %s\nBackend: %s\n' "$FRONTEND_RESULT" "$BACKEND_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$FRONTEND_RESULT" != "success" || "$BACKEND_RESULT" != "success" ]]; then
+            echo "::error::CI failed: every job must succeed (failed, cancelled or skipped jobs block merging)."
+            exit 1
+          fi
