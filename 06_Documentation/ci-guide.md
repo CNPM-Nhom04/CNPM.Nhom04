@@ -139,6 +139,20 @@ review và giải quyết thảo luận → merge. Push vào `main` chỉ kiểm
 - Các workflow cũ vẫn có thể xuất hiện trong lịch sử Actions sau khi xóa file;
   commit/PR mới chỉ chạy workflow còn tồn tại.
 
+## Lỗi checkout symlink trên runner Linux
+
+Run `40348448959` thất bại ở bước checkout của cả hai job vì 20 symlink trong
+`frontend/.claude/skills` và `frontend/.windsurf/skills` có đích rỗng. Lint/test
+chưa được chạy trong lần đó. Đã khôi phục các đích tương đối
+`../../.agents/skills/<tên-skill>` từ commit trước và kiểm tra đủ 20 đích có
+`SKILL.md` được Git theo dõi. Lần kiểm tra frontend local trước đó bỏ qua các
+thư mục này nên chưa phát hiện được lỗi checkout.
+
+Trên Windows, Git có thể biểu diễn symlink bằng file văn bản chứa đường dẫn
+đích. Giữ nguyên nội dung các file này; file đích rỗng làm checkout trên Linux
+thất bại trước khi CI kịp kiểm tra code. `.gitignore` không sửa được symlink
+đã nằm trong lịch sử Git.
+
 Tham khảo: [tạo branch protection rule](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/managing-a-branch-protection-rule),
 [xử lý required status checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
 [workflow dependencies và always()](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds).
