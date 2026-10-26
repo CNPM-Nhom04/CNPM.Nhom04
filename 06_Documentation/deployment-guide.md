@@ -55,10 +55,8 @@ Frontend sẽ chạy tại: `http://localhost:3001` (hoặc cổng mà Next.js t
 
 ### 1️⃣ Thư mục `.github/` (Tự động hóa CI/CD)
 Khu vực này do DevOps/Tech Lead quản lý. Các Developer bình thường không cần sửa vào đây.
-- `workflows/ci-backend.yml`: Kịch bản tự động test (Kiểm tra lỗi) cho code Backend mỗi khi có code mới.
-- `workflows/ci-frontend.yml`: Kịch bản tự động test cho code Giao diện (Frontend).
-- `workflows/cd-production.yml`: Kịch bản tự động đẩy code lên máy chủ thật khi dự án hoàn thành.
-- `workflows/cd-staging.yml`: Kịch bản tự động đẩy code lên máy chủ nháp để thầy cô/team test thử.
+- `workflows/ci.yml`: Workflow CI duy nhất cho frontend và backend; job `CI` là status check bắt buộc để bảo vệ `main`.
+- Cách chạy kiểm tra và bật bảo vệ nhánh: [CI và bảo vệ main](ci-guide.md).
 
 ### 2️⃣ Thư mục `01_Requirements/` & `02_Design/`
 - Nơi lưu trữ các tài liệu word, hình ảnh, file PDF yêu cầu đề tài của giáo viên.

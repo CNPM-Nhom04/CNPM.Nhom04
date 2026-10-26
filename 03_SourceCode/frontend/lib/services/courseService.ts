@@ -76,8 +76,11 @@ export async function createCourseData(data: {
     });
 
     return { success: true, data: { newCourse, newVersion } };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Lỗi khi tạo học phần:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Không thể tạo học phần",
+    };
   }
 }

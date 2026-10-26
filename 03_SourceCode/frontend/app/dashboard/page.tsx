@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/db";
+import type { academic_terms } from "@prisma/client";
+import { connection } from "next/server";
 
 export default async function DashboardPage() {
+  await connection();
+
   // Lấy số liệu thực tế từ cơ sở dữ liệu
   let courseCount = 0;
   let programCount = 0;
-  let activeTerm: any = null;
+  let activeTerm: academic_terms | null = null;
 
   try {
     [courseCount, programCount, activeTerm] = await Promise.all([

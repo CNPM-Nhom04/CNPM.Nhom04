@@ -27,5 +27,6 @@
 | 9 | DPM235506 | **Trần Thị Phương Dung** | QA / Security & Data Specialist |
 
 ## 3. Liên kết hệ thống
+* **CI và bảo vệ nhánh main:** [Hướng dẫn cấu hình](06_Documentation/ci-guide.md)
 * 🌐 **Mã nguồn (Source Code):** [CNPM-Nhom04/CNPM.Nhom04](https://github.com/CNPM-Nhom04/CNPM.Nhom04)
 

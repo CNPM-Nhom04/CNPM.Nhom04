@@ -4,7 +4,7 @@ Tài liệu này quy định cách các thành viên trong dự án nộp code v
 ---
 
 ## 1️⃣ Luật Thép: Tuyệt đối không Push trực tiếp lên `main`
-Nhánh `main` là nơi chứa code hoàn chỉnh và ổn định nhất. Github đã được cấu hình khóa nhánh này lại. Bạn không thể gõ `git push origin main`.
+Nhánh `main` là nơi chứa code đã được kiểm tra và duyệt. Admin cần bật bảo vệ nhánh theo [CI và bảo vệ main](ci-guide.md) để bắt buộc PR và status check `CI`; file workflow không tự khóa nhánh trên GitHub.
 Mọi tính năng mới, hoặc sửa lỗi đều phải được làm trên một nhánh riêng (Branch).
 
 ## 2️⃣ Quy Trình Code Tính Năng Mới (Mỗi ngày)
@@ -47,9 +47,9 @@ Sau khi đẩy code lên (Bước 4), code của bạn vẫn chỉ nằm ở nh�
 4. Bấm **Create pull request**.
 
 ### Bot Tự Động Kiểm Tra (CI)
-Ngay lúc này, Bot của Github Actions sẽ tự động lấy code của bạn đem đi quét lỗi (Lint) và chạy thử (Test).
+GitHub Actions chạy workflow `ci.yml` và tổng hợp kết quả vào check `CI`. Phạm vi kiểm tra frontend/backend hiện tại được ghi rõ trong [hướng dẫn CI](ci-guide.md).
 - ❌ **Màu đỏ (Failed):** Code có lỗi. Nút Merge bị khóa. Bạn phải mở VS Code lên sửa lỗi, gõ `git add`, `git commit` và `git push` lại. Bot sẽ tự động test lại.
-- ✅ **Màu xanh (Passed):** Code hoàn hảo. Báo cho Leader vào duyệt code.
+- ✅ **Màu xanh (Passed):** Các bước kiểm tra đã cấu hình đều thành công. Báo cho Leader vào duyệt code; CI không thay thế review và kiểm thử nghiệp vụ.
 
 ### Duyệt Code (Review & Merge)
 Bất kỳ thành viên nào trong nhóm cũng có thể vào xem code của bạn. Nếu mọi thứ đúng chuẩn, Leader sẽ bấm nút **Merge pull request** để gộp code của bạn vào `main`.
