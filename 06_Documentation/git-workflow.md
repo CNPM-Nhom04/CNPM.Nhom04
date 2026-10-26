@@ -54,3 +54,43 @@ GitHub Actions chạy workflow `ci.yml` và tổng hợp kết quả vào check 
 ### Duyệt Code (Review & Merge)
 Bất kỳ thành viên nào trong nhóm cũng có thể vào xem code của bạn. Nếu mọi thứ đúng chuẩn, Leader sẽ bấm nút **Merge pull request** để gộp code của bạn vào `main`.
 Chúc mừng! Bạn đã hoàn thành xuất sắc một chu trình phát triển phần mềm chuẩn quốc tế.
+
+## 4. Xử lý conflict khi cập nhật main
+
+Khi GitHub không thể giải quyết conflict trên trình duyệt, cập nhật nhánh tính
+năng tại máy. Bắt đầu khi `git status` báo working tree sạch; commit công việc
+đang làm trước khi merge.
+
+```bash
+git switch feature/dashboard-layout
+git fetch origin
+git merge origin/main
+git status
+```
+
+Conflict `modify/delete` có nghĩa một nhánh đã xóa file, nhánh kia sửa file.
+Loại này có thể không có dấu `<<<<<<<` trong file. Phải quyết định giữ file
+hay giữ việc xóa dựa trên cấu hình cuối cùng của repo.
+
+Trong lần chuyển sang một CI duy nhất, `.github/workflows/cd-staging.yml` đã bị
+xóa có chủ đích. Giữ việc xóa workflow cũ, giữ `.github/workflows/ci.yml` và giữ
+mã backend được hợp nhất từ `main`:
+
+```bash
+git rm -- .github/workflows/cd-staging.yml
+```
+
+Chạy các bước kiểm tra frontend/backend theo [hướng dẫn CI](ci-guide.md), stage
+các file đã sửa thêm nếu có, rồi kiểm tra không còn conflict:
+
+```bash
+git diff --name-only --diff-filter=U
+git diff --cached --stat
+git commit -m "Merge main and resolve unified CI workflow conflict"
+git push origin feature/dashboard-layout
+```
+
+Lệnh liệt kê conflict phải không in ra file nào trước khi commit. Commit này
+cập nhật nhánh tính năng; việc đưa code vào `main` vẫn thực hiện qua PR.
+Admin cần thay required checks cũ bằng check `CI` của workflow thống nhất để
+PR không chờ các workflow đã bị xóa.

@@ -9,15 +9,14 @@ Không lọc theo `paths`, để PR chỉ sửa tài liệu vẫn có kết qu�
 | Job | Kiểm tra |
 | --- | --- |
 | `Frontend` | Node.js 22, `npm ci`, ESLint, Prisma schema, TypeScript, production build |
-| `Backend` | Kiểm tra manifest; tự chạy `npm ci`, lint, unit test và build khi có mã nguồn/cấu hình NestJS |
+| `Backend` | Node.js 22, `npm ci`, ESLint, unit test xác thực và NestJS build |
 | `CI` | Chỉ thành công khi cả hai job trên thành công; thất bại nếu job bị lỗi, hủy hoặc bỏ qua |
 
-**Giới hạn hiện tại:** backend chỉ có `package.json`, `.env.example` và Dockerfile
-rỗng. Job `Backend` ghi cảnh báo và chỉ kiểm tra manifest. CI xanh hiện tại chưa
-chứng minh backend chạy được. Khi thêm `src/`, `apps/`, `libs/`, `test/`,
-`tsconfig.json` hoặc `nest-cli.json`, các bước backend tự bật. Khi đó phải commit
-`03_SourceCode/backend/package-lock.json`, cấu hình ESLint, TypeScript/NestJS và
-unit test hợp lệ. Không dùng `continue-on-error` hay `--passWithNoTests` để che lỗi.
+Backend đã được đồng bộ từ `main`, gồm mã xác thực, lockfile và cấu hình NestJS.
+Mọi bước backend đều bắt buộc chạy. Unit test dùng repository giả để kiểm tra
+đăng nhập, khóa tài khoản và các trường hợp từ chối đổi/đặt lại mật khẩu;
+không cần database hoặc gửi email. Script test không dùng `--passWithNoTests`:
+thiếu test hoặc test lỗi sẽ làm CI thất bại. Lint không tự sửa source.
 Frontend chưa có bộ unit test; hiện kiểm tra lint, kiểu dữ liệu, schema và build.
 
 Workflow không publish image hoặc deploy: các Dockerfile hiện đang rỗng. Không
@@ -39,6 +38,16 @@ npm run typecheck
 npm run build
 ```
 
+Kiểm tra backend từ thư mục gốc repo:
+
+```bash
+cd 03_SourceCode/backend
+npm ci
+npm run lint -- --no-fix
+npm test -- --ci --runInBand
+npm run build
+```
+
 Trên PowerShell nếu `npm.ps1` bị chặn bởi Execution Policy, dùng `npm.cmd` thay
 cho `npm`. Không cần đổi Execution Policy của máy.
 
@@ -47,7 +56,7 @@ chạy `npm install` tại đúng thư mục và commit cả manifest lẫn lock
 
 ## Kết quả kiểm tra lại ngày 26/10/2026
 
-Đã tạo bản sao riêng từ các file frontend được Git theo dõi, dùng nội dung đang
+Trước khi đồng bộ mã backend từ `main`, đã tạo bản sao riêng từ các file frontend được Git theo dõi, dùng nội dung đang
 sửa trong workspace; không sao chép `.env`, `.env.local`, `node_modules` hay
 `.next`. Kiểm tra trên Windows với Node.js 22.18.0:
 
@@ -60,14 +69,25 @@ sửa trong workspace; không sao chép `.env`, `.env.local`, `node_modules` hay
 | `npm run build` | Thành công; không có database chạy tại URL kiểm tra |
 | Parse YAML, kiểm tra triggers, dependencies và tên check `CI` | Thành công |
 | Chạy script tổng hợp với 16 cặp trạng thái job | Chỉ cặp `success/success` thành công |
-| Backend chưa có source / thêm source nhưng thiếu lockfile / thêm lockfile | Báo giới hạn / thất bại / bật các bước kiểm tra |
+
+Sau khi hợp nhất backend từ `origin/main` (`9afbb48`), đã kiểm tra thêm:
+
+- Cài dependencies backend từ lockfile: thành công.
+- Backend lint không sửa source: thành công.
+- Unit test `AuthService`: 10/10 trường hợp thành công.
+- Backend production build: thành công.
+- Chạy Jest với mẫu không khớp test nào: thoát mã 1, xác nhận thiếu test chặn CI.
+
+Đã bỏ `fallbackPolling` khỏi `compilerOptions` trong tsconfig backend vì
+TypeScript báo TS5023 (tùy chọn không hợp lệ). Các bước backend hiện luôn chạy;
+không còn cơ chế bỏ qua khi backend chỉ có scaffold.
 
 Build còn cảnh báo nhiều lockfile do lockfile rỗng ở thư mục gốc và lockfile của
 frontend cùng tồn tại. Build hiện vẫn thành công. Build cần truy cập Google Fonts;
 Prisma có thể cần tải engine trong lần chạy đầu.
 
 Kết quả trên xác nhận kiểm tra local, chưa thay cho một run trên runner Ubuntu
-của GitHub Actions. Backend chưa được build/test thực tế; chưa có unit test
+của GitHub Actions. Chưa có unit test
 frontend hoặc kiểm tra kết nối database. Branch protection chưa được xác nhận
 từ Settings của repository.
 
@@ -92,6 +112,9 @@ Settings của repository. Thay đổi file ở máy chưa tự bật bảo vệ
    be up to date before merging**. Tìm và chọn đúng check **`CI`** của GitHub
    Actions (job cuối trong workflow). Bỏ các required check của workflow đã xóa,
    ví dụ `build-and-test`, để tránh chờ check không còn tồn tại.
+   Nếu giao diện đang yêu cầu `CI Backend (NestJS)` hoặc `CI Frontend`, thay các
+   yêu cầu đó bằng check `CI` mới. Tên workflow cũ và tên job/status check có thể
+   khác nhau; đối chiếu mục Checks của PR để chọn chính xác.
 6. Bật **Require conversation resolution before merging** và **Do not allow
    bypassing the above settings** để áp dụng cả cho admin. Không thêm người/bot
    vào danh sách bypass PR. Giữ **Allow force pushes** và **Allow deletions** tắt.

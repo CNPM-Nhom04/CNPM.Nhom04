@@ -74,43 +74,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Validate backend manifest and detect implementation
-        id: source
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const assert = require('node:assert/strict');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          for (const name of ['lint', 'test', 'build']) {
-            assert.equal(typeof pkg.scripts?.[name], 'string', `Missing backend script: ${name}`);
-          }
-          const implemented = ['src', 'apps', 'libs', 'test', 'tsconfig.json', 'nest-cli.json']
-            .some(path => fs.existsSync(path));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `implemented=${implemented}\n`);
-          if (implemented) {
-            assert.ok(fs.existsSync('package-lock.json'), 'Commit backend/package-lock.json before running npm ci');
-          } else {
-            console.log('::warning::Backend contains only a scaffold; lint, tests and build are not available yet.');
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-              '### Backend coverage\nOnly package.json was validated. No backend source exists yet, so backend lint, tests and build were not run. Adding source/configuration enables the mandatory checks automatically.\n');
-          }
-          NODE
+          cache: npm
+          cache-dependency-path: 03_SourceCode/backend/package-lock.json
 
       - name: Install dependencies from lockfile
-        if: steps.source.outputs.implemented == 'true'
         run: npm ci
 
       - name: Lint without changing source
-        if: steps.source.outputs.implemented == 'true'
         run: npm run lint -- --no-fix
 
       - name: Run unit tests
-        if: steps.source.outputs.implemented == 'true'
         run: npm test -- --ci --runInBand
 
       - name: Build backend
-        if: steps.source.outputs.implemented == 'true'
         run: npm run build
 
   ci:
