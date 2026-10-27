@@ -2,64 +2,44 @@
 
 import { useState } from "react";
 import {
-  History,
-  Search,
-  Download,
-} from "lucide-react";
+  exportAudit,
+  type AuditItem as AuditLogItem,
+} from "@/lib/services/adminService";
+import { useAdminList } from "@/lib/hooks/useAdminList";
+import {
+  AdminFeedback,
+  AdminPagination,
+} from "@/components/admin/AdminFeedback";
+import { History, Search, Download } from "lucide-react";
 import { Button } from "@/components/ui";
-
-interface AuditLogItem {
-  id: string;
-  thoiGian: string;
-  nguoiThucHien: string;
-  vaiTro: string;
-  hanhDong: "CREATE" | "UPDATE" | "APPROVE" | "DELETE";
-  moTa: string;
-  diaChiIP: string;
-}
-
-const MOCK_AUDIT_LOGS: AuditLogItem[] = [
-  {
-    id: "log-01",
-    thoiGian: "10/10/2026 - 11:30:22",
-    nguoiThucHien: "Nguyễn Đức Huy",
-    vaiTro: "Cán bộ Đào tạo",
-    hanhDong: "CREATE",
-    moTa: "Khởi tạo mới Chương trình đào tạo: Thạc sĩ Khoa học Máy tính (MS-KHMT-2026)",
-    diaChiIP: "192.168.1.45",
-  },
-  {
-    id: "log-02",
-    thoiGian: "09/10/2026 - 15:45:10",
-    nguoiThucHien: "PGS.TS. Nguyễn Văn A",
-    vaiTro: "Hội đồng Khoa học",
-    hanhDong: "APPROVE",
-    moTa: "Phê duyệt biên bản thẩm định cho CTĐT: Tiến sĩ Khoa học Máy tính (PHD-KHMT-2025)",
-    diaChiIP: "192.168.1.88",
-  },
-  {
-    id: "log-03",
-    thoiGian: "08/10/2026 - 09:12:04",
-    nguoiThucHien: "Trần Thị Phương Dung",
-    vaiTro: "Quản trị viên",
-    hanhDong: "UPDATE",
-    moTa: "Cập nhật danh mục học phần dùng chung: Thêm học phần Trí tuệ Nhân tạo Nâng cao (CS701)",
-    diaChiIP: "192.168.1.10",
-  },
-  {
-    id: "log-04",
-    thoiGian: "05/10/2026 - 14:20:55",
-    nguoiThucHien: "Nguyễn Đức Huy",
-    vaiTro: "Cán bộ Đào tạo",
-    hanhDong: "DELETE",
-    moTa: "Xóa học phần nháp khỏi ngân hàng học phần: Mã HP cũ (OLD-101)",
-    diaChiIP: "192.168.1.45",
-  },
-];
 
 export default function AuditLogPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAction, setSelectedAction] = useState("ALL");
+
+  const list = useAdminList<AuditLogItem>(
+    "audit-log",
+    searchTerm,
+    "selectedAction",
+    selectedAction,
+  );
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<Error | null>(null);
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await exportAudit(
+        new URLSearchParams({ searchTerm: searchTerm.trim(), selectedAction }),
+      );
+    } catch (reason) {
+      setExportError(
+        reason instanceof Error ? reason : new Error("Không thể xuất nhật ký."),
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const getActionBadge = (action: AuditLogItem["hanhDong"]) => {
     switch (action) {
@@ -96,18 +76,11 @@ export default function AuditLogPage() {
     }
   };
 
-  const filteredLogs = MOCK_AUDIT_LOGS.filter((item) => {
-    const matchesSearch =
-      item.nguoiThucHien.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.moTa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.diaChiIP.includes(searchTerm);
-    const matchesAction =
-      selectedAction === "ALL" || item.hanhDong === selectedAction;
-    return matchesSearch && matchesAction;
-  });
+  const filteredLogs = list.data;
 
   return (
     <div className="space-y-6 pb-16">
+      <AdminFeedback error={list.error || exportError} retry={list.refresh} />
       {/* 1. Header tiêu đề */}
       <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -120,9 +93,15 @@ export default function AuditLogPage() {
             toàn hệ thống
           </p>
         </div>
-        <Button variant="outline" className="border-slate-300 text-slate-700">
+        <Button
+          variant="outline"
+          onClick={handleExport}
+          isLoading={exporting}
+          disabled={list.loading || !!list.error}
+          className="border-slate-300 text-slate-700"
+        >
           <Download className="h-4 w-4 mr-1.5 text-blue-600" />
-          Xuất Nhật Ký (CSV/Excel)
+          Xuất Nhật Ký (.xlsx)
         </Button>
       </div>
 
@@ -150,6 +129,10 @@ export default function AuditLogPage() {
             <option value="UPDATE">Cập nhật</option>
             <option value="APPROVE">Phê duyệt</option>
             <option value="DELETE">Xóa</option>
+            <option value="SUBMIT">Gửi duyệt</option>
+            <option value="COPY">Sao chép</option>
+            <option value="ROLE_ASSIGN">Gán vai trò</option>
+            <option value="LOGIN_FAILED">Đăng nhập thất bại</option>
           </select>
         </div>
       </div>
@@ -175,7 +158,9 @@ export default function AuditLogPage() {
                     className="hover:bg-slate-50/80 transition-colors"
                   >
                     <td className="px-5 py-4 text-xs font-semibold text-slate-600 truncate">
-                      {log.thoiGian}
+                      {new Date(log.thoiGian).toLocaleString("vi-VN", {
+                        timeZone: "Asia/Ho_Chi_Minh",
+                      })}
                     </td>
                     <td className="px-5 py-4">
                       <div className="font-bold text-slate-900">
@@ -202,7 +187,11 @@ export default function AuditLogPage() {
                     colSpan={5}
                     className="px-5 py-12 text-center text-slate-400"
                   >
-                    Không tìm thấy bản ghi nhật ký phù hợp.
+                    {list.loading
+                      ? "Đang tải nhật ký..."
+                      : list.error
+                        ? "Không thể tải nhật ký."
+                        : "Không tìm thấy bản ghi nhật ký phù hợp."}
                   </td>
                 </tr>
               )}
@@ -210,6 +199,12 @@ export default function AuditLogPage() {
           </table>
         </div>
       </div>
+      <AdminPagination
+        meta={list.meta}
+        page={list.page}
+        loading={list.loading}
+        changePage={list.changePage}
+      />
     </div>
   );
 }

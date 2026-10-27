@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  adminRequest,
+  type AdminUser as NguoiDungItem,
+} from "@/lib/services/adminService";
+import { useAdminList } from "@/lib/hooks/useAdminList";
+import {
+  AdminFeedback,
+  AdminPagination,
+} from "@/components/admin/AdminFeedback";
 import {
   Users,
   Plus,
@@ -13,46 +22,41 @@ import {
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
 
-interface NguoiDungItem {
-  id: string;
-  hoTen: string;
-  email: string;
-  donVi: string;
-  vaiTro: "QUAN_TRI" | "CAN_BO_DAO_TAO" | "HOI_DONG" | "GIANG_VIEN";
-  trangThai: boolean;
-}
-
-const MOCK_USERS: NguoiDungItem[] = [
-  {
-    id: "usr-01",
-    hoTen: "Nguyễn Đức Huy",
-    email: "huy.nd@agu.edu.vn",
-    donVi: "Khoa Công nghệ Thông tin",
-    vaiTro: "CAN_BO_DAO_TAO",
-    trangThai: true,
-  },
-  {
-    id: "usr-02",
-    hoTen: "PGS.TS. Nguyễn Văn A",
-    email: "nva@agu.edu.vn",
-    donVi: "Khoa Công nghệ Thông tin",
-    vaiTro: "HOI_DONG",
-    trangThai: true,
-  },
-  {
-    id: "usr-03",
-    hoTen: "Trần Thị Phương Dung",
-    email: "dung.ttp@agu.edu.vn",
-    donVi: "Phòng Đào tạo SĐH",
-    vaiTro: "QUAN_TRI",
-    trangThai: true,
-  },
-];
-
 export default function NguoiDungPage() {
-  const [users, setUsers] = useState<NguoiDungItem[]>(MOCK_USERS);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("ALL");
+
+  const list = useAdminList<NguoiDungItem>(
+    "nguoi-dung",
+    searchTerm,
+    "selectedRole",
+    selectedRole,
+  );
+  const users = list.data;
+  const [optionsVersion, setOptionsVersion] = useState(0);
+  const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState<Error | null>(null);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    adminRequest<{ units: { id: string; name: string }[] }>(
+      "nguoi-dung/options",
+      { signal: controller.signal },
+    )
+      .then((result) => {
+        if (!controller.signal.aborted) setUnits(result.units);
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted)
+          setMutationError(
+            reason instanceof Error
+              ? reason
+              : new Error("Không thể tải đơn vị."),
+          );
+      });
+    return () => controller.abort();
+  }, [optionsVersion]);
 
   // State quản lý Modal Thêm / Sửa
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,7 +65,10 @@ export default function NguoiDungPage() {
   const [formData, setFormData] = useState({
     hoTen: "",
     email: "",
-    donVi: "Khoa Công nghệ Thông tin",
+    donViId: "",
+    username: "",
+    password: "",
+    trangThai: true,
     vaiTro: "GIANG_VIEN" as NguoiDungItem["vaiTro"],
   });
 
@@ -92,68 +99,115 @@ export default function NguoiDungPage() {
           </span>
         );
       default:
-        return null;
+        return (
+          <span className="text-xs font-semibold text-slate-600">Học viên</span>
+        );
     }
   };
 
-  const filteredUsers = users.filter((item) => {
-    const matchesSearch =
-      item.hoTen.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.donVi.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === "ALL" || item.vaiTro === selectedRole;
-    return matchesSearch && matchesRole;
-  });
+  const filteredUsers = users;
 
-  const handleDelete = (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống?")) {
-      setUsers(users.filter((u) => u.id !== id));
+  const handleDelete = async (id: string) => {
+    if (
+      saving ||
+      !confirm("Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống?")
+    )
+      return;
+    setSaving(true);
+    setMutationError(null);
+    setMessage("");
+    try {
+      await adminRequest("nguoi-dung/" + id, { method: "DELETE" });
+      setMessage("Đã xóa tài khoản.");
+      list.refresh();
+    } catch (reason) {
+      setMutationError(
+        reason instanceof Error
+          ? reason
+          : new Error("Không thể xóa tài khoản."),
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleOpenAdd = () => {
     setEditingItem(null);
+    setMutationError(null);
+    setMessage("");
     setFormData({
       hoTen: "",
       email: "",
-      donVi: "Khoa Công nghệ Thông tin",
+      donViId: units[0]?.id ?? "",
       vaiTro: "GIANG_VIEN",
+      username: "",
+      password: "",
+      trangThai: true,
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (user: NguoiDungItem) => {
     setEditingItem(user);
+    setMutationError(null);
+    setMessage("");
     setFormData({
       hoTen: user.hoTen,
       email: user.email,
-      donVi: user.donVi,
+      donViId: user.donViId,
       vaiTro: user.vaiTro,
+      username: user.username,
+      password: "",
+      trangThai: user.trangThai,
     });
     setIsModalOpen(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingItem) {
-      setUsers(
-        users.map((u) => (u.id === editingItem.id ? { ...u, ...formData } : u)),
+  const handleSaveUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setMutationError(null);
+    setMessage("");
+    const { username, password, ...profile } = formData;
+    try {
+      await adminRequest(
+        editingItem ? "nguoi-dung/" + editingItem.id : "nguoi-dung",
+        {
+          method: editingItem ? "PUT" : "POST",
+          body: JSON.stringify(
+            editingItem ? profile : { ...profile, username, password },
+          ),
+        },
       );
-      alert("Cập nhật thông tin nhân sự thành công!");
-    } else {
-      const newUser: NguoiDungItem = {
-        id: `usr-${Date.now()}`,
-        ...formData,
-        trangThai: true,
-      };
-      setUsers([newUser, ...users]);
-      alert("Thêm tài khoản nhân sự thành công!");
+      setMessage(
+        editingItem
+          ? "Đã cập nhật tài khoản."
+          : "Đã tạo tài khoản. Người dùng có thể đăng nhập bằng tên đăng nhập hoặc email.",
+      );
+      setIsModalOpen(false);
+      list.refresh();
+    } catch (reason) {
+      setMutationError(
+        reason instanceof Error
+          ? reason
+          : new Error("Không thể lưu tài khoản."),
+      );
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   return (
     <div className="space-y-6 pb-16">
+      <AdminFeedback
+        error={list.error || (!isModalOpen ? mutationError : null)}
+        message={message}
+        retry={() => {
+          list.refresh();
+          setOptionsVersion((value) => value + 1);
+        }}
+      />
       <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-950 flex items-center gap-2">
@@ -167,6 +221,7 @@ export default function NguoiDungPage() {
         </div>
         <Button
           onClick={handleOpenAdd}
+          disabled={saving || units.length === 0}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
         >
           <Plus className="h-4 w-4 mr-1.5" />
@@ -196,6 +251,7 @@ export default function NguoiDungPage() {
           <option value="CAN_BO_DAO_TAO">Cán bộ Đào tạo</option>
           <option value="HOI_DONG">Hội đồng Khoa học</option>
           <option value="GIANG_VIEN">Giảng viên</option>
+          <option value="HOC_VIEN">Học viên</option>
         </select>
       </div>
 
@@ -236,12 +292,14 @@ export default function NguoiDungPage() {
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
-                        <CheckCircle2 className="h-3 w-3" /> Hoạt động
+                        <CheckCircle2 className="h-3 w-3" />{" "}
+                        {user.trangThai ? "Hoạt động" : "Ngừng hoạt động"}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          disabled={saving}
                           onClick={() => handleOpenEdit(user)}
                           title="Chỉnh sửa tài khoản"
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
@@ -249,6 +307,7 @@ export default function NguoiDungPage() {
                           <Edit3 className="h-4 w-4" />
                         </button>
                         <button
+                          disabled={saving}
                           onClick={() => handleDelete(user.id)}
                           title="Xóa tài khoản"
                           className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
@@ -265,7 +324,11 @@ export default function NguoiDungPage() {
                     colSpan={5}
                     className="px-5 py-12 text-center text-slate-400"
                   >
-                    Không tìm thấy nhân sự phù hợp.
+                    {list.loading
+                      ? "Đang tải người dùng..."
+                      : list.error
+                        ? "Không thể tải danh sách người dùng."
+                        : "Không tìm thấy nhân sự phù hợp."}
                   </td>
                 </tr>
               )}
@@ -274,10 +337,18 @@ export default function NguoiDungPage() {
         </div>
       </div>
 
+      <AdminPagination
+        meta={list.meta}
+        page={list.page}
+        loading={list.loading || saving}
+        changePage={list.changePage}
+      />
       {/* Modal Thêm / Cập Nhật Nhân Sự */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!saving) setIsModalOpen(false);
+        }}
         title={
           editingItem
             ? "Chỉnh Sửa Tài Khoản Nhân Sự"
@@ -290,6 +361,7 @@ export default function NguoiDungPage() {
             <Button
               type="button"
               variant="outline"
+              disabled={saving}
               onClick={() => setIsModalOpen(false)}
             >
               Hủy bỏ
@@ -297,6 +369,7 @@ export default function NguoiDungPage() {
             <Button
               type="submit"
               form="user-form"
+              isLoading={saving}
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
             >
               {editingItem ? "Cập Nhật Tài Khoản" : "Lưu Tài Khoản"}
@@ -305,6 +378,54 @@ export default function NguoiDungPage() {
         }
       >
         <form id="user-form" onSubmit={handleSaveUser} className="space-y-4">
+          <AdminFeedback error={mutationError} />
+          {!editingItem && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="admin-username"
+                  className="text-xs font-bold text-slate-700"
+                >
+                  Tên đăng nhập
+                </label>
+                <input
+                  id="admin-username"
+                  required
+                  minLength={3}
+                  maxLength={100}
+                  pattern="[a-zA-Z0-9_.@-]{3,100}"
+                  autoComplete="off"
+                  value={formData.username}
+                  onChange={(event) =>
+                    setFormData({ ...formData, username: event.target.value })
+                  }
+                  className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="admin-password"
+                  className="text-xs font-bold text-slate-700"
+                >
+                  Mật khẩu (10–72 ký tự, tối đa 72 byte)
+                </label>
+                <input
+                  id="admin-password"
+                  type="password"
+                  required
+                  minLength={10}
+                  maxLength={72}
+                  autoComplete="new-password"
+                  value={formData.password}
+                  onChange={(event) =>
+                    setFormData({ ...formData, password: event.target.value })
+                  }
+                  className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Họ và Tên Cán Bộ / Giảng Viên
@@ -341,15 +462,27 @@ export default function NguoiDungPage() {
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Đơn Vị Công Tác
             </label>
-            <input
-              type="text"
+            <select
               required
-              value={formData.donVi}
-              onChange={(e) =>
-                setFormData({ ...formData, donVi: e.target.value })
+              value={formData.donViId}
+              onChange={(event) =>
+                setFormData({ ...formData, donViId: event.target.value })
               }
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+            >
+              <option value="">Chọn đơn vị công tác</option>
+              {formData.donViId &&
+                !units.some((unit) => unit.id === formData.donViId) && (
+                  <option value={formData.donViId}>
+                    {editingItem?.donVi || "Đơn vị ngừng hoạt động"}
+                  </option>
+                )}
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-1.5">
@@ -370,8 +503,19 @@ export default function NguoiDungPage() {
               <option value="CAN_BO_DAO_TAO">Cán bộ Đào tạo</option>
               <option value="HOI_DONG">Hội đồng Khoa học</option>
               <option value="GIANG_VIEN">Giảng viên</option>
+              <option value="HOC_VIEN">Học viên</option>
             </select>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={formData.trangThai}
+              onChange={(event) =>
+                setFormData({ ...formData, trangThai: event.target.checked })
+              }
+            />
+            Tài khoản hoạt động
+          </label>
         </form>
       </Modal>
     </div>

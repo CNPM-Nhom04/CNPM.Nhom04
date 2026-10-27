@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { ReportsModule } from "./modules/reports/reports.module";
+import { AdminModule } from "./modules/admin/admin.module";
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { IdentityModule } from "./modules/identity/identity.module";
       }),
     }),
     IdentityModule,
+    ReportsModule,
+    AdminModule,
   ],
   controllers: [],
   providers: [],
