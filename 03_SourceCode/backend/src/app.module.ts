@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { ThesisDefenseModule } from "./modules/thesis-defense/thesis-defense.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { IdentityModule } from "./modules/identity/identity.module";
       }),
     }),
     IdentityModule,
+    ThesisDefenseModule,
   ],
   controllers: [],
   providers: [],

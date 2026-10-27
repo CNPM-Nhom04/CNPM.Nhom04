@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
+    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/core/database/data-source.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -14,6 +15,7 @@
     "lint:fix": "npm run lint -- --fix",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:defense-integration": "node test/thesis-defense.integration.cjs",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
