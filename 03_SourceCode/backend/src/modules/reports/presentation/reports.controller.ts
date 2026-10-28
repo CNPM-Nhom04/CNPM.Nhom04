@@ -1,5 +1,6 @@
 import {
   Controller,
+  Req,
   Get,
   Query,
   Res,
@@ -22,6 +23,10 @@ import {
 } from "../application/report-query.dto";
 import { ReportsService } from "../application/reports.service";
 
+import { ReportsGuard } from "./reports.guard";
+import { Request } from "express";
+type ReportRequest = Request & { user: { userId: string } };
+
 @ApiTags("Reports - Báo cáo")
 @ApiBearerAuth()
 @ApiResponse({ status: 401, description: "Chưa đăng nhập hoặc JWT hết hạn" })
@@ -29,7 +34,7 @@ import { ReportsService } from "../application/reports.service";
   status: 400,
   description: "Bộ lọc hoặc phân trang không hợp lệ",
 })
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ReportsGuard)
 @Controller("bao-cao")
 export class ReportsController {
   constructor(private readonly service: ReportsService) {}
@@ -41,8 +46,9 @@ export class ReportsController {
   findAll(
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     query: ReportQueryDto,
+    @Req() request: ReportRequest,
   ) {
-    return this.service.findAll(query);
+    return this.service.findAll(query, request.user.userId);
   }
 
   @Get("thong-ke")
@@ -50,8 +56,9 @@ export class ReportsController {
   getSummary(
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     query: ReportFilterDto,
+    @Req() request: ReportRequest,
   ) {
-    return this.service.getSummary(query);
+    return this.service.getSummary(query, request.user.userId);
   }
 
   @Get("bac-dao-tao")
@@ -69,8 +76,9 @@ export class ReportsController {
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     query: ReportFilterDto,
     @Res({ passthrough: true }) response: Response,
+    @Req() request: ReportRequest,
   ) {
-    const buffer = await this.service.exportExcel(query);
+    const buffer = await this.service.exportExcel(query, request.user.userId);
     response.set({
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

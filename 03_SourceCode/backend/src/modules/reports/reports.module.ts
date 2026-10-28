@@ -5,11 +5,14 @@ import { MysqlReportRepository } from "./infrastructure/report.repository";
 import { ReportsService } from "./application/reports.service";
 import { ReportsController } from "./presentation/reports.controller";
 
+import { ReportsGuard } from "./presentation/reports.guard";
+
 @Module({
   imports: [IdentityModule],
   controllers: [ReportsController],
   providers: [
     ReportsService,
+    ReportsGuard,
     { provide: REPORT_REPOSITORY, useClass: MysqlReportRepository },
   ],
   exports: [ReportsService],

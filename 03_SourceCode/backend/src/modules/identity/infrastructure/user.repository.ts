@@ -12,9 +12,16 @@ export class UserRepository implements IUserRepository {
   ) {}
 
   async findByUsernameOrEmail(identifier: string): Promise<User | null> {
-    return this.typeOrmRepo.findOne({
+    const matches = await this.typeOrmRepo.find({
       where: [{ username: identifier }, { email: identifier }],
+      take: 2,
     });
+    // Legacy cross-field collisions must not log into an arbitrary account.
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.typeOrmRepo.findOne({ where: { email } });
   }
 
   async findById(id: string): Promise<User | null> {

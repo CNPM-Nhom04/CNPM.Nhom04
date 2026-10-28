@@ -1,4 +1,5 @@
 export interface ReportFilter {
+  actorId?: string;
   searchTerm?: string;
   selectedDegree?: string;
 }

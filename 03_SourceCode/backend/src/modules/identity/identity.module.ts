@@ -1,3 +1,4 @@
+import { AuthRateLimitGuard } from "./presentation/auth-rate-limit.guard";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { JwtModule } from "@nestjs/jwt";
@@ -12,6 +13,10 @@ import { AuthService } from "./application/auth.service";
 import { AuthController } from "./presentation/auth.controller";
 import { JwtStrategy } from "./application/jwt.strategy";
 
+import { AuthSecurityRepository } from "./domain/auth-security.repository";
+import { MysqlAuthSecurityRepository } from "./infrastructure/auth-security.repository";
+import { PasswordMailer } from "./application/password-mailer";
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, PasswordResetToken]),
@@ -22,7 +27,9 @@ import { JwtStrategy } from "./application/jwt.strategy";
       useFactory: (configService: ConfigService) => ({
         secret:
           configService.get<string>("JWT_SECRET") ||
-          "dev_secret_key_change_in_env",
+          (() => {
+            throw new Error("JWT_SECRET is required");
+          })(),
         signOptions: {
           expiresIn: "30m",
         },
@@ -33,6 +40,9 @@ import { JwtStrategy } from "./application/jwt.strategy";
   providers: [
     AuthService,
     JwtStrategy,
+    PasswordMailer,
+    AuthRateLimitGuard,
+    { provide: AuthSecurityRepository, useClass: MysqlAuthSecurityRepository },
     {
       provide: "IUserRepository",
       useClass: UserRepository,
@@ -42,6 +52,6 @@ import { JwtStrategy } from "./application/jwt.strategy";
       useClass: PasswordResetTokenRepository,
     },
   ],
-  exports: [AuthService, JwtModule, PassportModule],
+  exports: [AuthService, AuthSecurityRepository, JwtModule, PassportModule],
 })
 export class IdentityModule {}

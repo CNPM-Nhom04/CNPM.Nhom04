@@ -3,6 +3,7 @@ import * as bcrypt from "bcryptjs";
 import { Readable } from "stream";
 import { Workbook } from "exceljs";
 import { AdminRepository, SETTING_DEFAULTS } from "../domain/admin.repository";
+import { AuthSecurityRepository } from "../../identity/domain/auth-security.repository";
 import { AdminService } from "./admin.service";
 
 describe("AdminService", () => {
@@ -15,13 +16,20 @@ describe("AdminService", () => {
       saveSettings: jest.fn(),
       listAudit: jest.fn(),
     };
-    service = new AdminService(repository as AdminRepository);
+    service = new AdminService(
+      repository as AdminRepository,
+      {
+        policy: jest.fn().mockResolvedValue({ passwordMinLength: 10 }),
+      } as unknown as AuthSecurityRepository,
+    );
   });
   it("hashes the password and keeps credentials out of the public profile", async () => {
     await service.createUser(
       {
         username: "new-admin",
         password: "NewPassword123!",
+        confirmPassword: "NewPassword123!",
+        scopeMode: "KEEP",
         hoTen: "Test",
         email: "test@example.com",
         donViId: "1",
@@ -42,6 +50,8 @@ describe("AdminService", () => {
         {
           username: "test",
           password: "ế".repeat(30),
+          confirmPassword: "ế".repeat(30),
+          scopeMode: "KEEP",
           hoTen: "Test",
           email: "test@example.com",
           donViId: "1",

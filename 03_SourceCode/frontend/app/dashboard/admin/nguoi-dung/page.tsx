@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import { useEffect, useState } from "react";
 import {
   adminRequest,
@@ -23,6 +25,10 @@ import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
 
 export default function NguoiDungPage() {
+  const sessionUser = useSessionUser();
+  const router = useRouter();
+  const canAssign = !!sessionUser?.permissions.includes("ROLE_SCOPE_MANAGE");
+  const passwordMinimum = sessionUser?.passwordMinLength || 10;
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("ALL");
 
@@ -68,6 +74,8 @@ export default function NguoiDungPage() {
     donViId: "",
     username: "",
     password: "",
+    confirmPassword: "",
+    scopeMode: "UNIT",
     trangThai: true,
     vaiTro: "GIANG_VIEN" as NguoiDungItem["vaiTro"],
   });
@@ -138,10 +146,12 @@ export default function NguoiDungPage() {
     setFormData({
       hoTen: "",
       email: "",
-      donViId: units[0]?.id ?? "",
+      donViId: "",
       vaiTro: "GIANG_VIEN",
       username: "",
       password: "",
+      confirmPassword: "",
+      scopeMode: "UNIT",
       trangThai: true,
     });
     setIsModalOpen(true);
@@ -158,6 +168,8 @@ export default function NguoiDungPage() {
       vaiTro: user.vaiTro,
       username: user.username,
       password: "",
+      confirmPassword: "",
+      scopeMode: "KEEP",
       trangThai: user.trangThai,
     });
     setIsModalOpen(true);
@@ -169,23 +181,35 @@ export default function NguoiDungPage() {
     setSaving(true);
     setMutationError(null);
     setMessage("");
-    const { username, password, ...profile } = formData;
+    const { username, password, confirmPassword, ...profile } = formData;
     try {
+      if (!editingItem && password !== confirmPassword)
+        throw new Error("Xác nhận mật khẩu không khớp.");
       await adminRequest(
         editingItem ? "nguoi-dung/" + editingItem.id : "nguoi-dung",
         {
           method: editingItem ? "PUT" : "POST",
           body: JSON.stringify(
-            editingItem ? profile : { ...profile, username, password },
+            editingItem
+              ? profile
+              : { ...profile, username, password, confirmPassword },
           ),
         },
       );
       setMessage(
         editingItem
           ? "Đã cập nhật tài khoản."
-          : "Đã tạo tài khoản. Người dùng có thể đăng nhập bằng tên đăng nhập hoặc email.",
+          : "Đã tạo tài khoản. Người dùng cần đổi mật khẩu trong lần đăng nhập đầu.",
       );
       setIsModalOpen(false);
+      if (
+        editingItem?.id === sessionUser?.id &&
+        editingItem?.email !== profile.email
+      ) {
+        router.replace("/dang-nhap");
+        router.refresh();
+        return;
+      }
       list.refresh();
     } catch (reason) {
       setMutationError(
@@ -221,7 +245,7 @@ export default function NguoiDungPage() {
         </div>
         <Button
           onClick={handleOpenAdd}
-          disabled={saving || units.length === 0}
+          disabled={saving || !canAssign}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
         >
           <Plus className="h-4 w-4 mr-1.5" />
@@ -407,13 +431,13 @@ export default function NguoiDungPage() {
                   htmlFor="admin-password"
                   className="text-xs font-bold text-slate-700"
                 >
-                  Mật khẩu (10–72 ký tự, tối đa 72 byte)
+                  Mật khẩu (từ {passwordMinimum} ký tự, có chữ và số)
                 </label>
                 <input
                   id="admin-password"
                   type="password"
                   required
-                  minLength={10}
+                  minLength={passwordMinimum}
                   maxLength={72}
                   autoComplete="new-password"
                   value={formData.password}
@@ -426,6 +450,62 @@ export default function NguoiDungPage() {
             </div>
           )}
 
+          {!editingItem && (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="admin-confirm-password"
+                className="text-xs font-bold text-slate-700"
+              >
+                Xác nhận mật khẩu
+              </label>
+              <input
+                id="admin-confirm-password"
+                type="password"
+                required
+                maxLength={72}
+                autoComplete="new-password"
+                value={formData.confirmPassword}
+                onChange={(e) =>
+                  setFormData({ ...formData, confirmPassword: e.target.value })
+                }
+                className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+              />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="admin-scope"
+              className="text-xs font-bold text-slate-700"
+            >
+              Phạm vi dữ liệu
+            </label>
+            {editingItem && (
+              <p className="text-xs text-slate-600">
+                Phạm vi hiện tại:{" "}
+                {editingItem.scopeSummary || "Chưa cấp phạm vi"}
+              </p>
+            )}
+            <select
+              id="admin-scope"
+              disabled={!canAssign}
+              value={formData.scopeMode}
+              onChange={(e) =>
+                setFormData({ ...formData, scopeMode: e.target.value })
+              }
+              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+            >
+              {editingItem && (
+                <option value="KEEP">Giữ nguyên phạm vi hiện tại</option>
+              )}
+              <option value="UNIT">Đơn vị công tác và đơn vị con</option>
+              <option value="GLOBAL">Toàn hệ thống</option>
+              <option value="NONE">Chưa cấp phạm vi</option>
+            </select>
+            <p className="text-xs text-slate-500">
+              {editingItem ? "Chọn phạm vi mới sẽ thay thế phạm vi cũ. " : ""}
+              Vai trò quyết định chức năng; phạm vi quyết định dữ liệu được xem.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Họ và Tên Cán Bộ / Giảng Viên
@@ -463,14 +543,13 @@ export default function NguoiDungPage() {
               Đơn Vị Công Tác
             </label>
             <select
-              required
               value={formData.donViId}
               onChange={(event) =>
                 setFormData({ ...formData, donViId: event.target.value })
               }
               className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
             >
-              <option value="">Chọn đơn vị công tác</option>
+              <option value="">Không gắn đơn vị / Chọn đơn vị công tác</option>
               {formData.donViId &&
                 !units.some((unit) => unit.id === formData.donViId) && (
                   <option value={formData.donViId}>
@@ -491,6 +570,7 @@ export default function NguoiDungPage() {
             </label>
             <select
               value={formData.vaiTro}
+              disabled={!canAssign}
               onChange={(e) =>
                 setFormData({
                   ...formData,

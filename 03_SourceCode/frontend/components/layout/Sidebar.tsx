@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -121,6 +122,45 @@ const menuGroups = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const user = useSessionUser();
+  const adminPermissions: Record<string, string> = {
+    "nguoi-dung": "USER_MANAGE",
+    "master-data": "MASTERDATA_MANAGE",
+    "cau-hinh": "SETTINGS_MANAGE",
+    "audit-log": "AUDIT_READ_ALL",
+  };
+  const visibleGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.href.startsWith("/dashboard/admin/"))
+          return (
+            user?.roles.includes("ADMIN") &&
+            user.permissions.includes(
+              adminPermissions[item.href.split("/").pop() || ""],
+            )
+          );
+        if (item.href === "/dashboard/bao-cao")
+          return user?.permissions.includes("PROGRAM_READ");
+        const features: Record<string, string> = {
+          "/dashboard/danh-muc-hoc-phan": "CATALOG_READ",
+          "/dashboard/chuong-trinh-dao-tao": "PROGRAM_READ",
+          "/dashboard/xet-duyet": "PROGRAM_APPROVE",
+          "/dashboard/so-sanh": "PROGRAM_COMPARE",
+          "/dashboard/de-tai-luan-van": "STUDENT_MANAGE",
+          "/dashboard/bao-ve-luan-van": "STUDENT_MANAGE",
+          "/dashboard/dang-ky-hoc-phan": "REGISTRATION_MANAGE",
+          "/dashboard/sinh-vien/dang-ky": "COURSE_REGISTER",
+          "/dashboard/quan-ly-diem": "STUDENT_MANAGE",
+          "/dashboard/xet-tot-nghiep": "STUDENT_MANAGE",
+        };
+        return (
+          !features[item.href] ||
+          user?.permissions.includes(features[item.href])
+        );
+      }),
+    }))
+    .filter((group) => group.items.length);
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
@@ -135,7 +175,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
-        {menuGroups.map((group, groupIdx) => (
+        {visibleGroups.map((group, groupIdx) => (
           <div key={groupIdx}>
             <p className="text-[11px] font-semibold text-slate-400 px-3 uppercase tracking-wider mb-2">
               {group.title}

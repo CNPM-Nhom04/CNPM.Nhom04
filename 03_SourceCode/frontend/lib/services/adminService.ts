@@ -20,6 +20,7 @@ export interface AdminUser {
   vaiTro: UserRole;
   trangThai: boolean;
   accountStatus: string;
+  scopeSummary?: string;
 }
 export type CategoryType = "KHOA_QUAN_LY" | "BAC_DAO_TAO" | "KHOI_KIEN_THUC";
 export interface MasterItem {

@@ -182,7 +182,7 @@ export default function BaoCaoPage() {
           <p>{error || actionError || degreeError}</p>
           {needsLogin ? (
             <Link
-              href="/dang-nhap"
+              href="/dang-nhap?next=/dashboard/bao-cao"
               className="mt-2 inline-block font-semibold underline"
             >
               Đăng nhập để xem báo cáo
