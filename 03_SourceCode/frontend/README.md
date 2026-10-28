@@ -34,3 +34,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## CTĐT kết nối NestJS
+
+Các trang /dashboard/chuong-trinh-dao-tao, /tao-moi, /:id/build và /:id/xet-duyet
+đã gọi API NestJS qua Next.js Route Handler và cookie JWT HttpOnly.
+Cấu hình BACKEND_API_URL trong .env.local, chạy migration backend trước khi sử dụng.
+Đăng nhập tài khoản cán bộ để soạn/gửi; dùng tài khoản người duyệt riêng để xét duyệt.
+Hướng dẫn chạy, API, quy tắc tín chỉ và test tích hợp:
+../backend/src/modules/programs/README.md.
