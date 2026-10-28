@@ -10,8 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/adapter-mariadb": "^7.10.0",
-    "@prisma/client": "^7.10.0",
+    "@prisma/adapter-mariadb": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.51.0",
     "mariadb": "^3.5.4",

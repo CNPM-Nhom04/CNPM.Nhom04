@@ -64,10 +64,11 @@ export class AuthService {
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
-    let userRole = "STUDENT";
-    if (user.username === "admin") userRole = "ADMIN";
-    else if (user.username.includes("officer")) userRole = "TRAINING_OFFICER";
-    else if (user.username.includes("approver")) userRole = "APPROVER";
+    const roles = await this.userRepository.findRoleCodes(user.id);
+    const userRole =
+      ["ADMIN", "TRAINING_OFFICER", "APPROVER", "LECTURER", "STUDENT"].find(
+        (role) => roles.includes(role),
+      ) || "STUDENT";
 
     const payload = {
       sub: user.id,
@@ -100,10 +101,11 @@ export class AuthService {
       );
     }
 
-    let userRole = "STUDENT";
-    if (user.username === "admin") userRole = "ADMIN";
-    else if (user.username.includes("officer")) userRole = "TRAINING_OFFICER";
-    else if (user.username.includes("approver")) userRole = "APPROVER";
+    const roles = await this.userRepository.findRoleCodes(user.id);
+    const userRole =
+      ["ADMIN", "TRAINING_OFFICER", "APPROVER", "LECTURER", "STUDENT"].find(
+        (role) => roles.includes(role),
+      ) || "STUDENT";
 
     return {
       id: user.id,

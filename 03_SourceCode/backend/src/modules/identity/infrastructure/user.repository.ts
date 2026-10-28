@@ -24,4 +24,12 @@ export class UserRepository implements IUserRepository {
   async save(user: User): Promise<User> {
     return this.typeOrmRepo.save(user);
   }
+
+  async findRoleCodes(userId: string): Promise<string[]> {
+    const rows = await this.typeOrmRepo.manager.query(
+      "SELECT r.role_code FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ? AND r.status = 'ACTIVE' ORDER BY r.id",
+      [userId],
+    );
+    return rows.map((row) => row.role_code);
+  }
 }

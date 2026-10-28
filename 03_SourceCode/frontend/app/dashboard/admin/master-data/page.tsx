@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { adminRequest, type MasterItem } from "@/lib/services/adminService";
+import { useAdminList } from "@/lib/hooks/useAdminList";
+import {
+  AdminFeedback,
+  AdminPagination,
+} from "@/components/admin/AdminFeedback";
 import {
   Database,
   Plus,
@@ -12,38 +18,20 @@ import {
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
 
-interface MasterItem {
-  id: string;
-  maDanhMuc: string;
-  tenDanhMuc: string;
-  loaiDanhMuc: "KHOA_QUAN_LY" | "BAC_DAO_TAO" | "KHOI_KIEN_THUC";
-  moTa: string;
-  trangThai: boolean;
-}
-
-const MOCK_MASTER_DATA: MasterItem[] = [
-  {
-    id: "md-01",
-    maDanhMuc: "CNTT",
-    tenDanhMuc: "Khoa Công nghệ Thông tin",
-    loaiDanhMuc: "KHOA_QUAN_LY",
-    moTa: "Đơn vị quản lý chuyên ngành CNTT và kỹ thuật phần mềm",
-    trangThai: true,
-  },
-  {
-    id: "md-02",
-    maDanhMuc: "THAC_SI",
-    tenDanhMuc: "Bậc Thạc sĩ",
-    loaiDanhMuc: "BAC_DAO_TAO",
-    moTa: "Chương trình đào tạo trình độ thạc sĩ định mức 60 tín chỉ",
-    trangThai: true,
-  },
-];
-
 export default function MasterDataPage() {
-  const [dataList, setDataList] = useState<MasterItem[]>(MOCK_MASTER_DATA);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
+
+  const list = useAdminList<MasterItem>(
+    "master-data",
+    searchTerm,
+    "selectedType",
+    selectedType,
+  );
+  const dataList = list.data;
+  const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState<Error | null>(null);
+  const [message, setMessage] = useState("");
 
   // State quản lý Modal và Thêm/Sửa
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +41,7 @@ export default function MasterDataPage() {
     tenDanhMuc: "",
     loaiDanhMuc: "KHOA_QUAN_LY" as MasterItem["loaiDanhMuc"],
     moTa: "",
+    trangThai: true,
   });
 
   const getCategoryLabel = (type: MasterItem["loaiDanhMuc"]) => {
@@ -80,66 +69,88 @@ export default function MasterDataPage() {
     }
   };
 
-  const filteredData = dataList.filter((item) => {
-    const matchesSearch =
-      item.tenDanhMuc.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.maDanhMuc.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType =
-      selectedType === "ALL" || item.loaiDanhMuc === selectedType;
-    return matchesSearch && matchesType;
-  });
+  const filteredData = dataList;
 
-  const handleDelete = (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa danh mục này?")) {
-      setDataList(dataList.filter((item) => item.id !== id));
+  const handleDelete = async (id: string) => {
+    if (saving || !confirm("Bạn có chắc chắn muốn xóa danh mục này?")) return;
+    setSaving(true);
+    setMutationError(null);
+    setMessage("");
+    try {
+      await adminRequest("master-data/" + encodeURIComponent(id), {
+        method: "DELETE",
+      });
+      setMessage("Đã xóa danh mục.");
+      list.refresh();
+    } catch (reason) {
+      setMutationError(
+        reason instanceof Error ? reason : new Error("Không thể xóa danh mục."),
+      );
+    } finally {
+      setSaving(false);
     }
   };
-
   const handleOpenAdd = () => {
     setEditingItem(null);
+    setMutationError(null);
+    setMessage("");
     setFormData({
       maDanhMuc: "",
       tenDanhMuc: "",
       loaiDanhMuc: "KHOA_QUAN_LY",
       moTa: "",
+      trangThai: true,
     });
     setIsModalOpen(true);
   };
-
   const handleOpenEdit = (item: MasterItem) => {
     setEditingItem(item);
+    setMutationError(null);
+    setMessage("");
     setFormData({
       maDanhMuc: item.maDanhMuc,
       tenDanhMuc: item.tenDanhMuc,
       loaiDanhMuc: item.loaiDanhMuc,
       moTa: item.moTa,
+      trangThai: item.trangThai,
     });
     setIsModalOpen(true);
   };
-
-  const handleSaveCategory = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingItem) {
-      setDataList(
-        dataList.map((item) =>
-          item.id === editingItem.id ? { ...item, ...formData } : item,
-        ),
+  const handleSaveCategory = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setMutationError(null);
+    setMessage("");
+    try {
+      await adminRequest(
+        editingItem
+          ? "master-data/" + encodeURIComponent(editingItem.id)
+          : "master-data",
+        {
+          method: editingItem ? "PUT" : "POST",
+          body: JSON.stringify(formData),
+        },
       );
-      alert("Cập nhật danh mục thành công!");
-    } else {
-      const newItem: MasterItem = {
-        id: `md-${Date.now()}`,
-        ...formData,
-        trangThai: true,
-      };
-      setDataList([newItem, ...dataList]);
-      alert("Thêm danh mục thành công!");
+      setMessage(editingItem ? "Đã cập nhật danh mục." : "Đã thêm danh mục.");
+      setIsModalOpen(false);
+      list.refresh();
+    } catch (reason) {
+      setMutationError(
+        reason instanceof Error ? reason : new Error("Không thể lưu danh mục."),
+      );
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   return (
     <div className="space-y-6 pb-16">
+      <AdminFeedback
+        error={list.error || (!isModalOpen ? mutationError : null)}
+        message={message}
+        retry={list.refresh}
+      />
       {/* 1. Header tiêu đề */}
       <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -221,12 +232,14 @@ export default function MasterDataPage() {
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
-                        <CheckCircle2 className="h-3 w-3" /> Hoạt động
+                        <CheckCircle2 className="h-3 w-3" />{" "}
+                        {item.trangThai ? "Hoạt động" : "Ngừng hoạt động"}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          disabled={saving}
                           onClick={() => handleOpenEdit(item)}
                           title="Chỉnh sửa danh mục"
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
@@ -234,6 +247,7 @@ export default function MasterDataPage() {
                           <Edit3 className="h-4 w-4" />
                         </button>
                         <button
+                          disabled={saving}
                           onClick={() => handleDelete(item.id)}
                           title="Xóa danh mục"
                           className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
@@ -250,7 +264,11 @@ export default function MasterDataPage() {
                     colSpan={6}
                     className="px-5 py-12 text-center text-slate-400"
                   >
-                    Không tìm thấy danh mục phù hợp.
+                    {list.loading
+                      ? "Đang tải danh mục..."
+                      : list.error
+                        ? "Không thể tải danh mục."
+                        : "Không tìm thấy danh mục phù hợp."}
                   </td>
                 </tr>
               )}
@@ -259,10 +277,18 @@ export default function MasterDataPage() {
         </div>
       </div>
 
+      <AdminPagination
+        meta={list.meta}
+        page={list.page}
+        loading={list.loading || saving}
+        changePage={list.changePage}
+      />
       {/* 4. Modal Thêm / Cập Nhật Danh Mục */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!saving) setIsModalOpen(false);
+        }}
         title={
           editingItem
             ? "Chỉnh Sửa Danh Mục Dùng Chung"
@@ -275,6 +301,7 @@ export default function MasterDataPage() {
             <Button
               type="button"
               variant="outline"
+              disabled={saving}
               onClick={() => setIsModalOpen(false)}
             >
               Hủy bỏ
@@ -282,6 +309,7 @@ export default function MasterDataPage() {
             <Button
               type="submit"
               form="master-form"
+              isLoading={saving}
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
             >
               {editingItem ? "Cập Nhật Danh Mục" : "Lưu Danh Mục"}
@@ -294,6 +322,7 @@ export default function MasterDataPage() {
           onSubmit={handleSaveCategory}
           className="space-y-4"
         >
+          <AdminFeedback error={mutationError} />
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Mã Danh Mục
@@ -331,6 +360,7 @@ export default function MasterDataPage() {
               Phân Loại Danh Mục
             </label>
             <select
+              disabled={!!editingItem}
               value={formData.loaiDanhMuc}
               onChange={(e) =>
                 setFormData({
@@ -360,6 +390,16 @@ export default function MasterDataPage() {
               className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             ></textarea>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={formData.trangThai}
+              onChange={(event) =>
+                setFormData({ ...formData, trangThai: event.target.checked })
+              }
+            />
+            Danh mục hoạt động
+          </label>
         </form>
       </Modal>
     </div>
