@@ -110,3 +110,4 @@ async function proxy(request: NextRequest, context: Context) {
   }
 }
 export { proxy as GET, proxy as POST };
+ 

@@ -110,3 +110,4 @@ export abstract class AdminRepository {
     all?: boolean,
   ): Promise<PageResult<AuditItem>>;
 }
+ 

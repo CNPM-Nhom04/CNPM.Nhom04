@@ -43,3 +43,4 @@ export abstract class AuthSecurityRepository {
   ): Promise<boolean>;
   abstract consumeReset(tokenHash: string, newHash: string): Promise<boolean>;
 }
+ 

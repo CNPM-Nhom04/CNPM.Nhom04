@@ -1,6 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { canAccessDashboard } from "@/lib/dashboardAccess";
 import {
   authRequest,
   AuthApiError,
@@ -40,7 +42,25 @@ export function SessionProvider({
   }, [pathname, user, router]);
   return (
     <SessionContext.Provider value={current}>
-      {children}
+      {canAccessDashboard(current, pathname) ? (
+        children
+      ) : (
+        <div
+          role="alert"
+          className="rounded-xl border border-slate-200 bg-white p-6 text-slate-900"
+        >
+          <p className="font-semibold">
+            Bạn không có quyền truy cập trang này.
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-2 inline-block text-blue-700 underline"
+          >
+            Về bảng điều khiển
+          </Link>
+        </div>
+      )}
     </SessionContext.Provider>
   );
 }
+ 

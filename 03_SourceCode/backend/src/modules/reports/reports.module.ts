@@ -18,3 +18,4 @@ import { ReportsGuard } from "./presentation/reports.guard";
   exports: [ReportsService],
 })
 export class ReportsModule {}
+ 

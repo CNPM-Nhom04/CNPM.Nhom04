@@ -111,3 +111,4 @@ khi mở các tiến trình test riêng. Bài auth tạm đổi grant/policy c�
 tạo tài khoản có marker auth_smoke_, giữ audit rồi xóa mềm tài khoản thử.
 Các test reset qua API dùng token fixture đã băm trong bản sao; unit test kiểm tra
 SMTP transport. Gửi/nhận email thật là bước riêng cần SMTP thực đã cấu hình.
+ 

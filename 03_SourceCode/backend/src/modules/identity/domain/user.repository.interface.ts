@@ -7,3 +7,4 @@ export interface IUserRepository {
   save(user: User): Promise<User>;
   findRoleCodes(userId: string): Promise<string[]>;
 }
+ 

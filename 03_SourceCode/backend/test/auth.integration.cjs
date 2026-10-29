@@ -652,3 +652,4 @@ async function rawToken(userId, expired = false) {
   console.error(error.message);
   process.exitCode = 1;
 });
+ 

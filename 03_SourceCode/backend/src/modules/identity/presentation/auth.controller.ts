@@ -121,3 +121,4 @@ export class AuthController {
     return this.authService.logout(req.user.userId, req.user.sessionId);
   }
 }
+ 

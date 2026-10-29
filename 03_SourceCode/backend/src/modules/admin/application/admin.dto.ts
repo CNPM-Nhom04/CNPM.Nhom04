@@ -180,3 +180,4 @@ export class SettingsDto {
   @MaxLength(255)
   ngoaiNguBatBuocTienSi: string;
 }
+ 

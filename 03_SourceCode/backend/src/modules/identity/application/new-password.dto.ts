@@ -26,3 +26,4 @@ export class NewPasswordDto {
   @MaxLength(72)
   confirmPassword: string;
 }
+ 

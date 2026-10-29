@@ -58,3 +58,4 @@ describe("PasswordMailer", () => {
     ).rejects.toThrow("SMTP_RECIPIENT_REJECTED");
   });
 });
+ 

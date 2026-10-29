@@ -279,3 +279,4 @@ export class MysqlAuthSecurityRepository extends AuthSecurityRepository {
     });
   }
 }
+ 

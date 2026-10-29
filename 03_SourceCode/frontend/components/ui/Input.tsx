@@ -26,7 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           ref={ref}
           className={cn(
-            "w-full h-9 rounded-md border bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors disabled:bg-slate-50 disabled:text-slate-400",
+            "w-full h-9 rounded-md border bg-white px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors disabled:bg-slate-50 disabled:text-slate-400",
             error
               ? "border-red-500 focus:border-red-500 focus:ring-red-500/30"
               : "border-slate-300 focus:border-blue-600",
@@ -44,3 +44,4 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 );
 
 Input.displayName = "Input";
+ 

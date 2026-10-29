@@ -36,3 +36,4 @@ const nodemailer = require("nodemailer");
   console.error("SMTP verification failed:", error.code || error.message);
   process.exitCode = 1;
 });
+ 

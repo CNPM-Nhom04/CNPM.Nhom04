@@ -67,3 +67,4 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
+ 

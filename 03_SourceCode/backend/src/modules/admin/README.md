@@ -83,6 +83,8 @@ ID BIGINT luôn trả string. Không trả password_hash hoặc token reset mậ
 {
   "username": "giangvien.demo",
   "password": "ExamplePassword123!",
+  "confirmPassword": "ExamplePassword123!",
+  "scopeMode": "KEEP",
   "hoTen": "Giảng viên thử nghiệm",
   "email": "giangvien.demo@example.com",
   "donViId": "1",
@@ -96,8 +98,12 @@ Mật khẩu tối thiểu 10 ký tự và tối đa 72 byte UTF-8, băm bcrypt 
 Email, username phải duy nhất, kể cả tài khoản đã xóa mềm.
 Vai trò giao diện ánh xạ: QUAN_TRI=ADMIN, CAN_BO_DAO_TAO=TRAINING_OFFICER,
 HOI_DONG=APPROVER, GIANG_VIEN=LECTURER, HOC_VIEN=STUDENT.
-Giao diện hiện quản lý một vai trò/tài khoản; khi lưu sẽ thay các gán vai trò cũ
-bằng vai trò được chọn. API admin không chỉnh user_scopes.
+The primary role is editable; keeping it unchanged preserves secondary roles.
+Changing roles/scopes requires ROLE_SCOPE_MANAGE. scopeMode supports KEEP (default),
+UNIT, GLOBAL and NONE; KEEP preserves existing MAJOR/PROGRAM assignments too.
+New accounts require confirmPassword and must change their initial password.
+Admin API access requires both the ADMIN role and the permission for the endpoint:
+USER_MANAGE, MASTERDATA_MANAGE, SETTINGS_MANAGE or AUDIT_READ_ALL.
 
 Không cho tự xóa, tự khóa hoặc tự hạ quyền. Quyền actor được kiểm tra lại trong
 transaction, các thao tác admin được tuần tự hóa bằng khóa trên vai trò ADMIN.
@@ -157,7 +163,7 @@ npm test -- --runInBand
 npm run build
 npm run lint
 # Cần cả backend :3002 và frontend :3000 đang chạy
-npm run test:admin-integration
+npm run test:admin-integration # isolated database copy only
 ```
 
 Bài tích hợp chạy trên database phát triển, cần có sẵn một ADMIN hoạt động.
@@ -168,3 +174,4 @@ Chỉ bỏ liên kết đơn vị của chính tài khoản thử đã xóa đ�
 audit bất biến và tài khoản thử đã xóa mềm được giữ lại.
 Có thể đổi FRONTEND_URL và ADMIN_TEST_BACKEND_URL khi chạy.
 Không chạy bài tích hợp trên database production.
+ 

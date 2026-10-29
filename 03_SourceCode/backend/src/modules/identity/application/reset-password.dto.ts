@@ -9,3 +9,4 @@ export class ResetPasswordDto extends NewPasswordDto {
   })
   token: string;
 }
+ 

@@ -21,3 +21,4 @@ describe("ReportsGuard", () => {
     expect(query).toHaveBeenCalledWith(expect.any(String), ["7"]);
   });
 });
+ 

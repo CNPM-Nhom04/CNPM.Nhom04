@@ -21,3 +21,4 @@ export async function getSession(): Promise<{
     return { user: null, status: 502 };
   }
 }
+ 

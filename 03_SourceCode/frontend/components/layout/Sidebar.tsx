@@ -20,6 +20,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canAccessDashboard } from "@/lib/dashboardAccess";
 
 const menuGroups = [
   {
@@ -123,42 +124,10 @@ const menuGroups = [
 export default function Sidebar() {
   const pathname = usePathname();
   const user = useSessionUser();
-  const adminPermissions: Record<string, string> = {
-    "nguoi-dung": "USER_MANAGE",
-    "master-data": "MASTERDATA_MANAGE",
-    "cau-hinh": "SETTINGS_MANAGE",
-    "audit-log": "AUDIT_READ_ALL",
-  };
   const visibleGroups = menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        if (item.href.startsWith("/dashboard/admin/"))
-          return (
-            user?.roles.includes("ADMIN") &&
-            user.permissions.includes(
-              adminPermissions[item.href.split("/").pop() || ""],
-            )
-          );
-        if (item.href === "/dashboard/bao-cao")
-          return user?.permissions.includes("PROGRAM_READ");
-        const features: Record<string, string> = {
-          "/dashboard/danh-muc-hoc-phan": "CATALOG_READ",
-          "/dashboard/chuong-trinh-dao-tao": "PROGRAM_READ",
-          "/dashboard/xet-duyet": "PROGRAM_APPROVE",
-          "/dashboard/so-sanh": "PROGRAM_COMPARE",
-          "/dashboard/de-tai-luan-van": "STUDENT_MANAGE",
-          "/dashboard/bao-ve-luan-van": "STUDENT_MANAGE",
-          "/dashboard/dang-ky-hoc-phan": "REGISTRATION_MANAGE",
-          "/dashboard/sinh-vien/dang-ky": "COURSE_REGISTER",
-          "/dashboard/quan-ly-diem": "STUDENT_MANAGE",
-          "/dashboard/xet-tot-nghiep": "STUDENT_MANAGE",
-        };
-        return (
-          !features[item.href] ||
-          user?.permissions.includes(features[item.href])
-        );
-      }),
+      items: group.items.filter((item) => canAccessDashboard(user, item.href)),
     }))
     .filter((group) => group.items.length);
 
@@ -211,3 +180,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+ 

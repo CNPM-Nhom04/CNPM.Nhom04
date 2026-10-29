@@ -19,3 +19,4 @@ export class AuthSessions1793208000000 implements MigrationInterface {
     await runner.query("DROP TABLE auth_sessions");
   }
 }
+ 

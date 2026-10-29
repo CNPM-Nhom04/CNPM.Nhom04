@@ -40,3 +40,4 @@ export class UserRepository implements IUserRepository {
     return rows.map((row) => row.role_code);
   }
 }
+ 

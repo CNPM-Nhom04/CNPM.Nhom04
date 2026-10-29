@@ -21,3 +21,4 @@ export class ReportsGuard implements CanActivate {
     return true;
   }
 }
+ 

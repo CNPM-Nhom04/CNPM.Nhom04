@@ -55,3 +55,4 @@ import { PasswordMailer } from "./application/password-mailer";
   exports: [AuthService, AuthSecurityRepository, JwtModule, PassportModule],
 })
 export class IdentityModule {}
+ 

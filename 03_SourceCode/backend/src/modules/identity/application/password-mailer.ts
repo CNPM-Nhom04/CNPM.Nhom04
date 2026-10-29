@@ -68,3 +68,4 @@ export class PasswordMailer {
     if (!result.accepted?.length) throw new Error("SMTP_RECIPIENT_REJECTED");
   }
 }
+ 

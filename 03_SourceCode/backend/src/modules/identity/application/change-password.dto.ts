@@ -8,3 +8,4 @@ export class ChangePasswordDto extends NewPasswordDto {
   @MaxLength(1024)
   oldPassword: string;
 }
+ 
