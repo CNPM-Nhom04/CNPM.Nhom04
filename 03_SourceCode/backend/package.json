@@ -22,7 +22,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:program-integration": "node test/program.integration.cjs",
     "test:program-parity": "node test/program-data-parity.cjs",
-    "test:program-scope": "node test/program-scope.integration.cjs"
+    "test:program-scope": "node test/program-scope.integration.cjs",
+    "test:defense-integration": "node test/thesis-defense.integration.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
