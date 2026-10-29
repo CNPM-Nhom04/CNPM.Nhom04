@@ -9,12 +9,13 @@ export class ReportsService {
     @Inject(REPORT_REPOSITORY) private readonly repository: ReportRepository,
   ) {}
 
-  async findAll(query: ReportQueryDto) {
+  async findAll(query: ReportQueryDto, actorId?: string) {
+    const filter = actorId ? { ...query, actorId } : query;
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const [data, summary] = await Promise.all([
-      this.repository.findAll(query, (page - 1) * limit, limit),
-      this.repository.getSummary(query),
+      this.repository.findAll(filter, (page - 1) * limit, limit),
+      this.repository.getSummary(filter),
     ]);
     return {
       data,
@@ -28,16 +29,18 @@ export class ReportsService {
     };
   }
 
-  getSummary(query: ReportFilterDto) {
-    return this.repository.getSummary(query);
+  getSummary(query: ReportFilterDto, actorId?: string) {
+    return this.repository.getSummary(actorId ? { ...query, actorId } : query);
   }
 
   getDegrees() {
     return this.repository.getDegrees();
   }
 
-  async exportExcel(query: ReportFilterDto): Promise<Buffer> {
-    const rows = await this.repository.findAll(query);
+  async exportExcel(query: ReportFilterDto, actorId?: string): Promise<Buffer> {
+    const rows = await this.repository.findAll(
+      actorId ? { ...query, actorId } : query,
+    );
     const workbook = new Workbook();
     workbook.creator = "CTDT System";
     const sheet = workbook.addWorksheet("Báo cáo CTĐT");
@@ -64,3 +67,4 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
+ 

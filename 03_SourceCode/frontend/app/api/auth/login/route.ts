@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl, upstreamError } from "@/lib/server/backend";
 
 export async function POST(request: NextRequest) {
-  if (
-    request.headers.get("origin") &&
-    request.headers.get("origin") !== request.nextUrl.origin
-  ) {
+  if (request.headers.get("origin") !== request.nextUrl.origin) {
     return NextResponse.json(
       { message: "Yêu cầu không hợp lệ." },
       { status: 403 },
@@ -57,7 +54,7 @@ export async function POST(request: NextRequest) {
     if (typeof result.access_token !== "string")
       throw new Error("Missing access token");
     const response = NextResponse.json(
-      { success: true },
+      { success: true, user: result.user },
       { headers: { "Cache-Control": "no-store" } },
     );
     response.cookies.set(AUTH_COOKIE, result.access_token, {
@@ -65,10 +62,16 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 30 * 60,
+      maxAge:
+        typeof result.expiresIn === "number" &&
+        result.expiresIn > 0 &&
+        result.expiresIn <= 86400
+          ? result.expiresIn
+          : 30 * 60,
     });
     return response;
   } catch {
     return NextResponse.json({ message: upstreamError(502) }, { status: 502 });
   }
 }
+ 

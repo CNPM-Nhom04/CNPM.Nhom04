@@ -1,3 +1,4 @@
+import { ReportsGuard } from "./reports.guard";
 import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import * as request from "supertest";
@@ -30,6 +31,13 @@ describe("Reports HTTP", () => {
       ],
     })
       .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context) => {
+          context.switchToHttp().getRequest().user = { userId: "1" };
+          return true;
+        },
+      })
+      .overrideGuard(ReportsGuard)
       .useValue({ canActivate: () => true })
       .compile();
     app = module.createNestApplication();
@@ -101,3 +109,4 @@ describe("Reports HTTP", () => {
       );
   });
 });
+ 

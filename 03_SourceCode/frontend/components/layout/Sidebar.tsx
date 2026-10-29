@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +20,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canAccessDashboard } from "@/lib/dashboardAccess";
 
 const menuGroups = [
   {
@@ -121,6 +123,13 @@ const menuGroups = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const user = useSessionUser();
+  const visibleGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessDashboard(user, item.href)),
+    }))
+    .filter((group) => group.items.length);
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
@@ -135,7 +144,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
-        {menuGroups.map((group, groupIdx) => (
+        {visibleGroups.map((group, groupIdx) => (
           <div key={groupIdx}>
             <p className="text-[11px] font-semibold text-slate-400 px-3 uppercase tracking-wider mb-2">
               {group.title}
@@ -171,3 +180,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+ 

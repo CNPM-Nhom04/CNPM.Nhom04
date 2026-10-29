@@ -94,10 +94,15 @@ async function category(type) {
       JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
       WHERE r.role_code='ADMIN' AND u.account_status='ACTIVE' AND u.deleted_at IS NULL LIMIT 1`);
     assert.ok(admin, "A pre-existing active ADMIN is required");
+    const sessionId = require("node:crypto").randomUUID();
+    await db.query(
+      "INSERT INTO auth_sessions (id,user_id,expires_at,timeout_minutes) VALUES (?,?,TIMESTAMPADD(MINUTE,10,UTC_TIMESTAMP(6)),10)",
+      [sessionId, admin.id],
+    );
     adminCookie =
       "ctdt_access_token=" +
       new JwtService({ secret: process.env.JWT_SECRET }).sign(
-        { sub: admin.id },
+        { sub: admin.id, jti: sessionId },
         { expiresIn: "10m" },
       );
     await call("/api/admin/nguoi-dung", 401, { cookie: "" });
@@ -124,7 +129,12 @@ async function category(type) {
       vaiTro: "GIANG_VIEN",
       trangThai: true,
     };
-    const credentials = { ...profile, username: marker, password };
+    const credentials = {
+      ...profile,
+      username: marker,
+      password,
+      confirmPassword: password,
+    };
     const created = await json("/api/admin/nguoi-dung", 201, {
       method: "POST",
       body: credentials,
@@ -147,12 +157,36 @@ async function category(type) {
       .getSetCookie()
       .find((value) => value.startsWith("ctdt_access_token="));
     assert.ok(setCookie && /HttpOnly/i.test(setCookie));
-    const userCookie = setCookie.split(";")[0];
+    let userCookie = setCookie.split(";")[0];
+    await call("/api/auth/change-password", 200, {
+      method: "POST",
+      cookie: userCookie,
+      body: {
+        oldPassword: password,
+        newPassword: password + "New",
+        confirmPassword: password + "New",
+      },
+    });
+    const relogin = await call("/api/auth/login", 200, {
+      method: "POST",
+      cookie: "",
+      body: { identifier: marker, password: password + "New" },
+    });
+    userCookie = relogin.headers
+      .getSetCookie()
+      .find((value) => value.startsWith("ctdt_access_token="))
+      .split(";")[0];
     await call("/api/admin/nguoi-dung", 403, { cookie: userCookie });
     const forgedCookie =
       "ctdt_access_token=" +
       new JwtService({ secret: process.env.JWT_SECRET }).sign(
-        { sub: userId, role: "ADMIN" },
+        {
+          sub: userId,
+          role: "ADMIN",
+          jti: new JwtService({ secret: process.env.JWT_SECRET }).decode(
+            userCookie.slice("ctdt_access_token=".length),
+          ).jti,
+        },
         { expiresIn: "2m" },
       );
     await call("/api/admin/audit-log", 403, { cookie: forgedCookie });
@@ -291,3 +325,4 @@ async function category(type) {
   console.error(error.message);
   process.exitCode = 1;
 });
+ 

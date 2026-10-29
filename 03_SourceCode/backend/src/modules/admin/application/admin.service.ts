@@ -1,3 +1,4 @@
+import { AuthSecurityRepository } from "../../identity/domain/auth-security.repository";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { Workbook } from "exceljs";
@@ -19,7 +20,10 @@ import {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly repository: AdminRepository) {}
+  constructor(
+    private readonly repository: AdminRepository,
+    private readonly security: AuthSecurityRepository,
+  ) {}
 
   listUsers(query: UsersQueryDto) {
     return this.repository.listUsers(query);
@@ -30,7 +34,19 @@ export class AdminService {
   async createUser(input: CreateUserDto, actor: Actor) {
     if (Buffer.byteLength(input.password, "utf8") > 72)
       throw new BadRequestException("Mật khẩu tối đa 72 byte UTF-8.");
-    const { username, password, ...profile } = input;
+    const { passwordMinLength } = await this.security.policy();
+    if (input.password !== input.confirmPassword)
+      throw new BadRequestException("Xác nhận mật khẩu không khớp.");
+    if (
+      Array.from(input.password).length < passwordMinLength ||
+      !/[A-Za-z]/.test(input.password) ||
+      !/\d/.test(input.password) ||
+      input.password === input.username
+    )
+      throw new BadRequestException(
+        `Mật khẩu cần ít nhất ${passwordMinLength} ký tự, có chữ và số, khác tên đăng nhập.`,
+      );
+    const { username, password, confirmPassword, ...profile } = input;
     return this.repository.createUser(
       profile,
       username,
@@ -115,3 +131,4 @@ export class AdminService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
+ 

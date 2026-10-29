@@ -46,9 +46,18 @@ const USER_SELECT = `
   SELECT CAST(u.id AS CHAR) AS id, u.username, u.full_name AS hoTen,
     COALESCE(u.email, '') AS email, CAST(u.organizational_unit_id AS CHAR) AS donViId,
     COALESCE(o.unit_name, '') AS donVi, u.account_status AS accountStatus,
+    (SELECT GROUP_CONCAT(CASE s.scope_type
+      WHEN 'GLOBAL' THEN 'Toàn hệ thống'
+      WHEN 'ORG_UNIT' THEN CONCAT('Đơn vị: ',su.unit_name)
+      WHEN 'MAJOR' THEN CONCAT('Ngành: ',sm.major_name)
+      WHEN 'PROGRAM' THEN CONCAT('Chương trình: ',sp.program_code)
+      END SEPARATOR '; ')
+      FROM user_scopes s LEFT JOIN organizational_units su ON su.id=s.organizational_unit_id
+      LEFT JOIN majors sm ON sm.id=s.major_id LEFT JOIN training_programs sp ON sp.id=s.program_id
+      WHERE s.user_id=u.id) AS scopeSummary,
     (SELECT r.role_code FROM user_roles ur JOIN roles r ON r.id = ur.role_id
       WHERE ur.user_id = u.id AND r.status = 'ACTIVE'
-      ORDER BY FIELD(r.role_code, 'ADMIN','TRAINING_OFFICER','APPROVER','LECTURER','STUDENT'), r.id LIMIT 1) AS roleCode
+      ORDER BY CASE WHEN r.role_code IN ('ADMIN','TRAINING_OFFICER','APPROVER','LECTURER','STUDENT') THEN FIELD(r.role_code, 'ADMIN','TRAINING_OFFICER','APPROVER','LECTURER','STUDENT') ELSE 99 END, r.id LIMIT 1) AS roleCode
   FROM users u LEFT JOIN organizational_units o ON o.id = u.organizational_unit_id
 `;
 const CATEGORY_SELECT = Object.entries(CATEGORIES)
@@ -105,6 +114,7 @@ export class MysqlAdminRepository extends AdminRepository {
       vaiTro: (ROLE_ALIASES[row.roleCode] || "HOC_VIEN") as UserRole,
       trangThai: row.accountStatus === "ACTIVE",
       accountStatus: row.accountStatus,
+      scopeSummary: row.scopeSummary || "Chưa cấp phạm vi",
     };
   }
 
@@ -155,6 +165,7 @@ export class MysqlAdminRepository extends AdminRepository {
   ): Promise<T> {
     try {
       return await this.dataSource.transaction(async (manager) => {
+        await manager.query("SET time_zone = '+00:00'");
         // Serialize administrative writes and re-check authority inside the transaction.
         await manager.query(
           "SELECT id FROM roles WHERE role_code = 'ADMIN' FOR UPDATE",
@@ -163,8 +174,9 @@ export class MysqlAdminRepository extends AdminRepository {
           `SELECT u.id FROM users u
           JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id
           WHERE u.id = ? AND u.deleted_at IS NULL AND u.account_status = 'ACTIVE'
-            AND r.role_code = 'ADMIN' AND r.status = 'ACTIVE' FOR UPDATE`,
-          [actor.id],
+            AND r.role_code = 'ADMIN' AND r.status = 'ACTIVE'
+            AND EXISTS (SELECT 1 FROM user_roles pur JOIN roles pr ON pr.id=pur.role_id JOIN role_permissions rp ON rp.role_id=pr.id JOIN permissions p ON p.id=rp.permission_id WHERE pur.user_id=u.id AND pr.status='ACTIVE' AND p.permission_code=?) FOR UPDATE`,
+          [actor.id, actor.permission || ""],
         );
         if (!activeAdmin)
           throw new ForbiddenException(
@@ -217,15 +229,20 @@ export class MysqlAdminRepository extends AdminRepository {
   private async validateUserReferences(
     manager: EntityManager,
     input: UserInput,
+    existingUnit?: string,
   ) {
-    const [unit] = await manager.query(
-      "SELECT id FROM organizational_units WHERE id = ? AND status = 'ACTIVE'",
-      [input.donViId],
-    );
-    if (!unit)
-      throw new BadRequestException(
-        "Đơn vị công tác không tồn tại hoặc đã ngừng hoạt động.",
+    if (input.scopeMode === "UNIT" && !input.donViId)
+      throw new BadRequestException("Chọn đơn vị khi cấp phạm vi đơn vị.");
+    if (input.donViId) {
+      const [unit] = await manager.query(
+        "SELECT id,status FROM organizational_units WHERE id=?",
+        [input.donViId],
       );
+      if (!unit || (unit.status !== "ACTIVE" && input.donViId !== existingUnit))
+        throw new BadRequestException(
+          "Đơn vị không tồn tại hoặc đã ngừng hoạt động.",
+        );
+    }
     const [role] = await manager.query(
       "SELECT CAST(id AS CHAR) AS id FROM roles WHERE role_code = ? AND status = 'ACTIVE'",
       [ROLE_CODES[input.vaiTro]],
@@ -237,6 +254,37 @@ export class MysqlAdminRepository extends AdminRepository {
     return String(role.id);
   }
 
+  private async scopePermission(manager: EntityManager, actor: Actor) {
+    const [permission] = await manager.query(
+      "SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND r.status='ACTIVE' AND p.permission_code='ROLE_SCOPE_MANAGE' LIMIT 1",
+      [actor.id],
+    );
+    if (!permission)
+      throw new ForbiddenException(
+        "Bạn chưa có quyền gán vai trò và phạm vi dữ liệu.",
+      );
+  }
+  private async applyScope(
+    manager: EntityManager,
+    id: string,
+    input: UserInput,
+    actor: Actor,
+  ) {
+    if (!input.scopeMode || input.scopeMode === "KEEP") return;
+    await this.scopePermission(manager, actor);
+    await manager.query("DELETE FROM user_scopes WHERE user_id=?", [id]);
+    if (input.scopeMode === "GLOBAL")
+      await manager.query(
+        "INSERT INTO user_scopes (user_id,scope_type) VALUES (?,'GLOBAL')",
+        [id],
+      );
+    if (input.scopeMode === "UNIT")
+      await manager.query(
+        "INSERT INTO user_scopes (user_id,scope_type,organizational_unit_id) VALUES (?,'ORG_UNIT',?)",
+        [id, input.donViId],
+      );
+  }
+
   async createUser(
     input: UserInput,
     username: string,
@@ -244,15 +292,24 @@ export class MysqlAdminRepository extends AdminRepository {
     actor: Actor,
   ): Promise<UserItem> {
     return this.write(actor, async (manager) => {
+      await this.scopePermission(manager, actor);
+      const [duplicate] = await manager.query(
+        "SELECT id FROM users WHERE username IN (?,?) OR email IN (?,?) LIMIT 1",
+        [username, input.email, username, input.email],
+      );
+      if (duplicate)
+        throw new ConflictException(
+          "Tên đăng nhập hoặc email đã được sử dụng.",
+        );
       const roleId = await this.validateUserReferences(manager, input);
       await manager.query(
-        `INSERT INTO users (username, email, full_name, organizational_unit_id, password_hash, account_status)
-        VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (username, email, full_name, organizational_unit_id, password_hash, account_status, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, 1)`,
         [
           username,
           input.email,
           input.hoTen,
-          input.donViId,
+          input.donViId || null,
           passwordHash,
           input.trangThai ? "ACTIVE" : "DISABLED",
         ],
@@ -264,6 +321,7 @@ export class MysqlAdminRepository extends AdminRepository {
         "INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (?, ?, ?)",
         [id, roleId, actor.id],
       );
+      await this.applyScope(manager, id, input, actor);
       const user = await this.getUser(manager, id);
       await this.audit(
         manager,
@@ -286,6 +344,11 @@ export class MysqlAdminRepository extends AdminRepository {
   ): Promise<UserItem> {
     return this.write(actor, async (manager) => {
       const old = await this.getUser(manager, id);
+      const [emailConflict] = await manager.query(
+        "SELECT id FROM users WHERE id<>? AND (username=? OR email=?) LIMIT 1",
+        [id, input.email, input.email],
+      );
+      if (emailConflict) throw new ConflictException("Email đã được sử dụng.");
       if (
         id === actor.id &&
         (!input.trangThai || input.vaiTro !== "QUAN_TRI")
@@ -294,23 +357,41 @@ export class MysqlAdminRepository extends AdminRepository {
           "Không thể tự khóa hoặc tự hạ quyền quản trị.",
         );
       }
-      const roleId = await this.validateUserReferences(manager, input);
+      const roleId = await this.validateUserReferences(
+        manager,
+        input,
+        old.donViId,
+      );
       await manager.query(
         `UPDATE users SET full_name = ?, email = ?, organizational_unit_id = ?, account_status = ?,
         failed_login_count = 0, locked_until = NULL WHERE id = ? AND deleted_at IS NULL`,
         [
           input.hoTen,
           input.email,
-          input.donViId,
+          input.donViId || null,
           input.trangThai ? "ACTIVE" : "DISABLED",
           id,
         ],
       );
-      await manager.query("DELETE FROM user_roles WHERE user_id = ?", [id]);
-      await manager.query(
-        "INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (?, ?, ?)",
-        [id, roleId, actor.id],
-      );
+      if (!input.trangThai || input.email !== old.email) {
+        await manager.query(
+          "UPDATE auth_sessions SET revoked_at=UTC_TIMESTAMP(6) WHERE user_id=? AND revoked_at IS NULL",
+          [id],
+        );
+        await manager.query(
+          "UPDATE password_reset_tokens SET used_at=UTC_TIMESTAMP(6) WHERE user_id=? AND used_at IS NULL",
+          [id],
+        );
+      }
+      if (input.vaiTro !== old.vaiTro) {
+        await this.scopePermission(manager, actor);
+        await manager.query("DELETE FROM user_roles WHERE user_id = ?", [id]);
+        await manager.query(
+          "INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (?, ?, ?)",
+          [id, roleId, actor.id],
+        );
+      }
+      await this.applyScope(manager, id, input, actor);
       const user = await this.getUser(manager, id);
       await this.audit(
         manager,
@@ -335,6 +416,14 @@ export class MysqlAdminRepository extends AdminRepository {
       const old = await this.getUser(manager, id);
       await manager.query(
         "UPDATE users SET deleted_at = UTC_TIMESTAMP(6), account_status = 'DISABLED' WHERE id = ?",
+        [id],
+      );
+      await manager.query(
+        "UPDATE auth_sessions SET revoked_at=UTC_TIMESTAMP(6) WHERE user_id=? AND revoked_at IS NULL",
+        [id],
+      );
+      await manager.query(
+        "UPDATE password_reset_tokens SET used_at=UTC_TIMESTAMP(6) WHERE user_id=? AND used_at IS NULL",
         [id],
       );
       await this.audit(
@@ -597,3 +686,4 @@ export class MysqlAdminRepository extends AdminRepository {
     );
   }
 }
+ 

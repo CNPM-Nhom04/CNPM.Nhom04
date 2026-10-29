@@ -44,9 +44,11 @@ describe("AdminGuard", () => {
         account_status: "ACTIVE",
         deleted_at: null,
         isAdmin: 1,
+        hasPermission: 1,
       },
     ]);
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(request.user.username).toBe("actual-admin");
   });
 });
+ 

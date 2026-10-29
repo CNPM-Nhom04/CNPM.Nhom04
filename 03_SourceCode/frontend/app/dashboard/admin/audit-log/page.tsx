@@ -70,7 +70,19 @@ export default function AuditLogPage() {
       default:
         return (
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-50 text-slate-700">
-            Khác
+            {(
+              {
+                SUBMIT: "Gửi duyệt",
+                COPY: "Sao chép",
+                ARCHIVE: "Lưu trữ",
+                ROLE_ASSIGN: "Gán vai trò",
+                LOGIN_FAILED: "Đăng nhập thất bại",
+                LOGIN_SUCCESS: "Đăng nhập",
+                LOGOUT: "Đăng xuất",
+                CHANGE_PASSWORD: "Đổi mật khẩu",
+                RESET_PASSWORD: "Đặt lại mật khẩu",
+              } as Record<string, string>
+            )[action] || action}
           </span>
         );
     }
@@ -132,6 +144,9 @@ export default function AuditLogPage() {
             <option value="SUBMIT">Gửi duyệt</option>
             <option value="COPY">Sao chép</option>
             <option value="ROLE_ASSIGN">Gán vai trò</option>
+            <option value="ARCHIVE">Lưu trữ</option>
+            <option value="LOGIN_SUCCESS">Đăng nhập thành công</option>
+            <option value="LOGOUT">Đăng xuất</option>
             <option value="LOGIN_FAILED">Đăng nhập thất bại</option>
           </select>
         </div>
@@ -208,3 +223,4 @@ export default function AuditLogPage() {
     </div>
   );
 }
+ 

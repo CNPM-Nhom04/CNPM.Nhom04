@@ -21,6 +21,9 @@ import { ForgotPasswordDto } from "../application/forgot-password.dto";
 import { ResetPasswordDto } from "../application/reset-password.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 
+import { AuthRateLimitGuard } from "./auth-rate-limit.guard";
+
+@UseGuards(AuthRateLimitGuard)
 @ApiTags("Authentication")
 @Controller("auth")
 export class AuthController {
@@ -37,8 +40,13 @@ export class AuthController {
     status: 401,
     description: "Sai thông tin hoặc tài khoản đang bị khóa.",
   })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Request() req) {
+    return this.authService.login(loginDto, req.ip);
+  }
+
+  @Get("password-policy")
+  passwordPolicy() {
+    return this.authService.passwordPolicy();
   }
 
   @UseGuards(JwtAuthGuard)
@@ -109,7 +117,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Đăng xuất khỏi hệ thống (FR-AUT-06)" })
   @ApiResponse({ status: 200, description: "Đăng xuất thành công." })
-  async logout() {
-    return this.authService.logout();
+  async logout(@Request() req) {
+    return this.authService.logout(req.user.userId, req.user.sessionId);
   }
 }
+ 

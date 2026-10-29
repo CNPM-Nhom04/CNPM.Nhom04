@@ -44,16 +44,33 @@ const BASE_QUERY = `
   WHERE (? = '' OR LOCATE(LOWER(?), LOWER(p.program_code)) > 0
     OR LOCATE(LOWER(?), LOWER(COALESCE(v.program_name_snapshot, p.program_name))) > 0)
     AND (? = 'ALL' OR e.level_code = ? OR e.level_name = ?)
+    AND (? IS NULL OR EXISTS (
+      SELECT 1 FROM user_scopes s WHERE s.user_id=? AND (
+        s.scope_type='GLOBAL'
+        OR (s.scope_type='ORG_UNIT' AND EXISTS (SELECT 1 FROM organizational_unit_closure cl WHERE cl.ancestor_id=s.organizational_unit_id AND cl.descendant_id=p.managing_unit_id))
+        OR (s.scope_type='MAJOR' AND s.major_id=p.major_id)
+        OR (s.scope_type='PROGRAM' AND s.program_id=p.id)
+      )
+    ))
 `;
 
 @Injectable()
 export class MysqlReportRepository implements ReportRepository {
   constructor(private readonly dataSource: DataSource) {}
 
-  private parameters(filter: ReportFilter): string[] {
+  private parameters(filter: ReportFilter): (string | null)[] {
     const search = filter.searchTerm?.trim() || "";
     const degree = filter.selectedDegree?.trim() || "ALL";
-    return [search, search, search, degree, degree, degree];
+    return [
+      search,
+      search,
+      search,
+      degree,
+      degree,
+      degree,
+      filter.actorId || null,
+      filter.actorId || null,
+    ];
   }
 
   async findAll(
@@ -61,7 +78,7 @@ export class MysqlReportRepository implements ReportRepository {
     offset?: number,
     limit?: number,
   ): Promise<ReportItem[]> {
-    const parameters: (string | number)[] = this.parameters(filter);
+    const parameters: (string | number | null)[] = this.parameters(filter);
     let sql = BASE_QUERY + " ORDER BY maCTDT ASC, p.id ASC";
     if (limit !== undefined) {
       sql += " LIMIT ? OFFSET ?";
@@ -105,3 +122,4 @@ export class MysqlReportRepository implements ReportRepository {
     );
   }
 }
+ 

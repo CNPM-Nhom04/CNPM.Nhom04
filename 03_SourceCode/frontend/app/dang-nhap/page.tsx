@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
@@ -25,10 +26,31 @@ export default function LoginPage() {
         const result = await response.json();
         throw new Error(result.message || "Đăng nhập thất bại.");
       }
-      const next = new URLSearchParams(window.location.search).get("next");
-      router.replace(
-        next?.startsWith("/dashboard/") ? next : "/dashboard/bao-cao",
-      );
+      const result = await response.json();
+      if (result.user?.mustChangePassword) {
+        router.replace("/doi-mat-khau");
+      } else {
+        const next = new URLSearchParams(window.location.search).get("next");
+        let target =
+          result.user?.role === "ADMIN"
+            ? "/dashboard/admin/nguoi-dung"
+            : "/dashboard";
+        if (next) {
+          try {
+            const parsed = new URL(next, window.location.origin);
+            if (
+              parsed.origin === window.location.origin &&
+              (parsed.pathname === "/dashboard" ||
+                parsed.pathname.startsWith("/dashboard/") ||
+                parsed.pathname === "/doi-mat-khau")
+            )
+              target = parsed.pathname + parsed.search;
+          } catch {
+            /* Invalid return URLs use the default authorized landing page. */
+          }
+        }
+        router.replace(target);
+      }
       router.refresh();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Không thể đăng nhập.");
@@ -82,6 +104,12 @@ export default function LoginPage() {
             {error}
           </p>
         )}
+        <Link
+          href="/quen-mat-khau"
+          className="block text-sm text-blue-600 underline"
+        >
+          Quên mật khẩu?
+        </Link>
         <Button type="submit" isLoading={loading} className="w-full">
           Đăng nhập
         </Button>
@@ -89,3 +117,4 @@ export default function LoginPage() {
     </main>
   );
 }
+ 

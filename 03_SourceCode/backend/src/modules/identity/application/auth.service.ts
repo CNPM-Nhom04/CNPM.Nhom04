@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   Inject,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { LoginDto } from "./login.dto";
@@ -11,277 +12,233 @@ import { ForgotPasswordDto } from "./forgot-password.dto";
 import { ResetPasswordDto } from "./reset-password.dto";
 import { IUserRepository } from "../domain/user.repository.interface";
 import { IPasswordResetTokenRepository } from "../domain/password-reset-token.repository.interface";
+import { AuthSecurityRepository } from "../domain/auth-security.repository";
+import { PasswordMailer } from "./password-mailer";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
-import * as nodemailer from "nodemailer";
 
+const dummyHash = bcrypt.hashSync("Unknown-account-placeholder-123", 12);
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
-    @Inject("IUserRepository")
-    private readonly userRepository: IUserRepository,
+    @Inject("IUserRepository") private readonly users: IUserRepository,
     @Inject("IPasswordResetTokenRepository")
-    private readonly resetTokenRepository: IPasswordResetTokenRepository,
-    private readonly jwtService: JwtService,
+    private readonly tokens: IPasswordResetTokenRepository,
+    private readonly jwt: JwtService,
+    private readonly security: AuthSecurityRepository,
+    private readonly mailer: PasswordMailer,
   ) {}
-
-  async login(loginDto: LoginDto) {
-    const user = await this.userRepository.findByUsernameOrEmail(
-      loginDto.identifier,
+  private role(roles: string[]) {
+    return (
+      ["ADMIN", "TRAINING_OFFICER", "APPROVER", "LECTURER", "STUDENT"].find(
+        (r) => roles.includes(r),
+      ) || "UNASSIGNED"
     );
+  }
+  async login(dto: LoginDto, ip?: string) {
+    const policy = await this.security.policy();
+    const user = await this.users.findByUsernameOrEmail(dto.identifier.trim());
     if (!user) {
-      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu không đúng");
-    }
-
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await bcrypt.compare(dto.password, dummyHash);
       throw new UnauthorizedException(
-        "Tài khoản đang bị khóa tạm thời. Vui lòng thử lại sau.",
+        "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản đang bị khóa.",
       );
     }
-
-    if (user.accountStatus && user.accountStatus !== "ACTIVE") {
-      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu không đúng");
+    if (
+      user.accountStatus !== "ACTIVE" ||
+      user.deletedAt ||
+      (user.lockedUntil && user.lockedUntil > new Date())
+    ) {
+      throw new UnauthorizedException(
+        "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản đang bị khóa.",
+      );
     }
-
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
+    if (!(await bcrypt.compare(dto.password, user.passwordHash))) {
+      await this.security.recordFailure(user.id, user.passwordHash, policy, ip);
+      throw new UnauthorizedException(
+        "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản đang bị khóa.",
+      );
+    }
+    const sessionId = crypto.randomUUID();
+    const fresh = await this.security.completeLogin(
+      user.id,
       user.passwordHash,
+      sessionId,
+      policy.sessionMinutes,
+      ip,
     );
-
-    if (!isPasswordValid) {
-      user.failedLoginCount += 1;
-      if (user.failedLoginCount >= 5) {
-        const lockTime = new Date();
-        lockTime.setMinutes(lockTime.getMinutes() + 15);
-        user.lockedUntil = lockTime;
-      }
-      await this.userRepository.save(user);
-      throw new UnauthorizedException("Tên đăng nhập hoặc mật khẩu không đúng");
-    }
-
-    user.failedLoginCount = 0;
-    user.lockedUntil = null;
-    user.lastLoginAt = new Date();
-    await this.userRepository.save(user);
-
-    const roles = await this.userRepository.findRoleCodes(user.id);
-    const userRole =
-      ["ADMIN", "TRAINING_OFFICER", "APPROVER", "LECTURER", "STUDENT"].find(
-        (role) => roles.includes(role),
-      ) || "STUDENT";
-
-    const payload = {
-      sub: user.id,
-      username: user.username,
-      email: user.email,
-      fullName: user.fullName,
-      role: userRole,
-      orgUnitId: user.organizationalUnitId,
-    };
-
+    if (!fresh)
+      throw new UnauthorizedException(
+        "Tài khoản đã thay đổi. Vui lòng đăng nhập lại.",
+      );
+    const roles = await this.users.findRoleCodes(user.id);
+    const accessToken = await this.jwt.signAsync(
+      { sub: user.id, jti: sessionId },
+      { expiresIn: policy.sessionMinutes * 60 },
+    );
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      access_token: accessToken,
+      expiresIn: policy.sessionMinutes * 60,
       user: {
         id: user.id,
-        username: user.username,
-        email: user.email,
-        fullName: user.fullName,
-        role: userRole,
-        orgUnitId: user.organizationalUnitId,
-        mustChangePassword: user.mustChangePassword,
+        username: fresh.username,
+        fullName: fresh.fullName,
+        email: fresh.email,
+        role: this.role(roles),
+        mustChangePassword: fresh.mustChangePassword,
       },
     };
   }
-
-  async getProfile(userId: string) {
-    const user = await this.userRepository.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException(
-        "Không tìm thấy người dùng hoặc tài khoản đã bị xóa",
-      );
-    }
-
-    const roles = await this.userRepository.findRoleCodes(user.id);
-    const userRole =
-      ["ADMIN", "TRAINING_OFFICER", "APPROVER", "LECTURER", "STUDENT"].find(
-        (role) => roles.includes(role),
-      ) || "STUDENT";
-
+  async passwordPolicy() {
+    const { passwordMinLength } = await this.security.policy();
+    return { passwordMinLength };
+  }
+  async getProfile(id: string) {
+    const user = await this.users.findById(id);
+    if (!user || user.deletedAt || user.accountStatus !== "ACTIVE")
+      throw new UnauthorizedException("Tài khoản không còn hoạt động.");
+    const [access, policy] = await Promise.all([
+      this.security.access(id),
+      this.security.policy(),
+    ]);
     return {
       id: user.id,
       username: user.username,
-      email: user.email,
       fullName: user.fullName,
-      role: userRole,
-      accountStatus: user.accountStatus,
+      email: user.email,
+      role: this.role(access.roles),
+      ...access,
       orgUnitId: user.organizationalUnitId,
+      accountStatus: user.accountStatus,
       mustChangePassword: user.mustChangePassword,
+      passwordMinLength: policy.passwordMinLength,
       lastLoginAt: user.lastLoginAt,
       passwordChangedAt: user.passwordChangedAt,
     };
   }
-
-  async changePassword(
-    userId: string,
+  private async validatePassword(
+    password: string,
+    confirmation: string,
     username: string,
-    dto: ChangePasswordDto,
   ) {
-    const user = await this.userRepository.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException("Không tìm thấy người dùng");
-    }
-
-    const isMatch = await bcrypt.compare(dto.oldPassword, user.passwordHash);
-    if (!isMatch) {
-      throw new BadRequestException("Mật khẩu hiện tại không đúng");
-    }
-
-    if (dto.newPassword === username) {
-      throw new BadRequestException(
-        "Mật khẩu mới không được trùng với tên đăng nhập",
-      );
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    user.passwordHash = await bcrypt.hash(dto.newPassword, salt);
-    user.passwordChangedAt = new Date();
-    user.mustChangePassword = false;
-
-    await this.userRepository.save(user);
-    return { message: "Đổi mật khẩu thành công" };
-  }
-
-  async forgotPassword(dto: ForgotPasswordDto, requestedIp?: string) {
-    const neutralResponse = {
-      message:
-        "Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi.",
-    };
-
-    const user = await this.userRepository.findByUsernameOrEmail(dto.email);
-    if (!user || !user.email) {
-      return neutralResponse;
-    }
-
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 30);
-
-    await this.resetTokenRepository.save({
-      userId: user.id,
-      tokenHash: tokenHash,
-      expiresAt: expiresAt,
-      usedAt: null,
-      requestedIp: requestedIp || null,
-    });
-
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
-
-    await this.sendResetPasswordEmail(user.email, user.fullName, resetLink);
-
-    return neutralResponse;
-  }
-
-  async resetPassword(dto: ResetPasswordDto) {
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(dto.token)
-      .digest("hex");
-
-    const tokenRecord =
-      await this.resetTokenRepository.findByTokenHash(tokenHash);
-
+    const { passwordMinLength } = await this.security.policy();
     if (
-      !tokenRecord ||
-      tokenRecord.usedAt !== null ||
-      tokenRecord.expiresAt < new Date()
+      typeof password !== "string" ||
+      Array.from(password).length < passwordMinLength ||
+      Buffer.byteLength(password, "utf8") > 72 ||
+      !/[A-Za-z]/.test(password) ||
+      !/\d/.test(password)
     ) {
       throw new BadRequestException(
-        "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn",
+        `Mật khẩu cần ít nhất ${passwordMinLength} ký tự, có chữ và số, tối đa 72 byte UTF-8.`,
       );
     }
-
-    const user = await this.userRepository.findById(tokenRecord.userId);
-    if (!user) {
-      throw new BadRequestException("Không tìm thấy người dùng");
-    }
-
-    if (dto.newPassword === user.username) {
+    if (password !== confirmation)
+      throw new BadRequestException("Xác nhận mật khẩu không khớp.");
+    if (password === username)
+      throw new BadRequestException("Mật khẩu không được trùng tên đăng nhập.");
+  }
+  async changePassword(id: string, _username: string, dto: ChangePasswordDto) {
+    const user = await this.users.findById(id);
+    if (!user || user.deletedAt || user.accountStatus !== "ACTIVE")
+      throw new UnauthorizedException("Tài khoản không còn hoạt động.");
+    await this.validatePassword(
+      dto.newPassword,
+      dto.confirmPassword,
+      user.username,
+    );
+    if (!(await bcrypt.compare(dto.oldPassword, user.passwordHash)))
+      throw new BadRequestException("Mật khẩu hiện tại không đúng.");
+    if (await bcrypt.compare(dto.newPassword, user.passwordHash))
       throw new BadRequestException(
-        "Mật khẩu mới không được trùng với tên đăng nhập",
+        "Mật khẩu mới phải khác mật khẩu hiện tại.",
       );
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    user.passwordHash = await bcrypt.hash(dto.newPassword, salt);
-    user.passwordChangedAt = new Date();
-    user.mustChangePassword = false;
-    user.failedLoginCount = 0;
-    user.lockedUntil = null;
-    await this.userRepository.save(user);
-
-    tokenRecord.usedAt = new Date();
-    await this.resetTokenRepository.save(tokenRecord);
-
-    return { message: "Đặt lại mật khẩu thành công" };
+    const updated = await this.security.changePassword(
+      id,
+      user.passwordHash,
+      await bcrypt.hash(dto.newPassword, 12),
+    );
+    if (!updated)
+      throw new BadRequestException(
+        "Tài khoản hoặc mật khẩu vừa thay đổi. Vui lòng đăng nhập lại.",
+      );
+    return { message: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại." };
   }
-
-  async logout() {
-    return { message: "Đăng xuất thành công" };
-  }
-
-  private async sendResetPasswordEmail(
-    toEmail: string,
-    fullName: string,
-    resetLink: string,
-  ): Promise<void> {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (!smtpUser || !smtpPass) {
-      console.log(`[DEV SMTP EMAIL] To: ${toEmail} | Reset Link: ${resetLink}`);
-      return;
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    });
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  async forgotPassword(dto: ForgotPasswordDto, ip?: string) {
+    this.mailer.assertConfigured();
+    const message =
+      "Nếu email thuộc một tài khoản đang hoạt động, hệ thống sẽ gửi liên kết đặt lại mật khẩu. Vui lòng kiểm tra cả thư rác.";
+    const user = await this.users.findByEmail(dto.email.trim());
+    if (
+      !user ||
+      !user.email ||
+      user.deletedAt ||
+      user.accountStatus !== "ACTIVE"
+    )
+      return { message };
+    const { resetMinutes } = await this.security.policy();
+    const token = crypto.randomBytes(32).toString("hex");
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+    const created = await this.security.createReset(
+      user.id,
+      hash,
+      new Date(Date.now() + resetMinutes * 60000),
+      ip,
+    );
+    if (created) {
       try {
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || smtpUser,
-          to: toEmail,
-          subject: "[Hệ thống Quản lý CTĐT] Liên kết đặt lại mật khẩu",
-          html: `
-            <p>Xin chào <strong>${fullName}</strong>,</p>
-            <p>Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
-            <p>Vui lòng nhấn vào liên kết dưới đây để đặt lại mật khẩu mới (liên kết chỉ sử dụng 1 lần và hết hạn sau <strong>30 phút</strong>):</p>
-            <p><a href="${resetLink}">${resetLink}</a></p>
-            <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</p>
-          `,
-        });
-        console.log(
-          `[SMTP SUCCESS] Đã gửi email đặt lại mật khẩu tới ${toEmail}`,
+        await this.mailer.sendReset(
+          user.email,
+          user.fullName,
+          token,
+          resetMinutes,
         );
-        return;
       } catch (error) {
-        console.error(
-          `[SMTP ERROR] Gửi email lần ${attempt}/3 thất bại:`,
-          error instanceof Error ? error.message : error,
+        // Never log SMTP credentials or reset links, and do not disclose account existence.
+        this.logger.error(
+          "Password reset email delivery failed: " +
+            (error.code || "SMTP_DELIVERY_FAILED"),
         );
       }
     }
+    return { message };
+  }
+  async resetPassword(dto: ResetPasswordDto) {
+    const hash = crypto.createHash("sha256").update(dto.token).digest("hex");
+    const token = await this.tokens.findByTokenHash(hash);
+    if (!token || token.usedAt || token.expiresAt <= new Date())
+      throw new BadRequestException(
+        "Liên kết không hợp lệ, đã dùng hoặc đã hết hạn.",
+      );
+    const user = await this.users.findById(token.userId);
+    if (!user || user.deletedAt || user.accountStatus !== "ACTIVE")
+      throw new BadRequestException(
+        "Liên kết không hợp lệ, đã dùng hoặc đã hết hạn.",
+      );
+    await this.validatePassword(
+      dto.newPassword,
+      dto.confirmPassword,
+      user.username,
+    );
+    if (await bcrypt.compare(dto.newPassword, user.passwordHash))
+      throw new BadRequestException(
+        "Mật khẩu mới phải khác mật khẩu hiện tại.",
+      );
+    if (
+      !(await this.security.consumeReset(
+        hash,
+        await bcrypt.hash(dto.newPassword, 12),
+      ))
+    )
+      throw new BadRequestException(
+        "Liên kết không hợp lệ, đã dùng hoặc đã hết hạn.",
+      );
+    return { message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại." };
+  }
+  async logout(userId: string, sessionId: string) {
+    await this.security.revokeSession(userId, sessionId);
+    return { message: "Đăng xuất thành công" };
   }
 }
+ 

@@ -64,6 +64,7 @@ export class AdminController {
   private actor(request: AdminRequest): Actor {
     return {
       id: request.user.userId,
+      permission: request.adminPermission,
       username: request.user.username,
       ip: request.ip || "",
     };
@@ -172,3 +173,4 @@ export class AdminController {
     });
   }
 }
+ 

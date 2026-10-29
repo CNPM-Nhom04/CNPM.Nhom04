@@ -20,6 +20,7 @@ export const CATEGORY_TYPES = [
 ] as const;
 export type CategoryType = (typeof CATEGORY_TYPES)[number];
 export interface Actor {
+  permission?: string;
   id: string;
   username: string;
   ip: string;
@@ -37,6 +38,7 @@ export interface PageResult<T> {
   meta: { page: number; limit: number; total: number; totalPages: number };
 }
 export interface UserInput {
+  scopeMode?: "KEEP" | "UNIT" | "GLOBAL" | "NONE";
   hoTen: string;
   email: string;
   donViId: string;
@@ -48,6 +50,7 @@ export interface UserItem extends UserInput {
   username: string;
   donVi: string;
   accountStatus: string;
+  scopeSummary?: string;
 }
 export interface CategoryInput {
   maDanhMuc: string;
@@ -107,3 +110,4 @@ export abstract class AdminRepository {
     all?: boolean,
   ): Promise<PageResult<AuditItem>>;
 }
+ 

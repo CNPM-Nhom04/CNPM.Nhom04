@@ -1,4 +1,5 @@
 export interface ReportFilter {
+  actorId?: string;
   searchTerm?: string;
   selectedDegree?: string;
 }
@@ -30,3 +31,4 @@ export interface ReportRepository {
   getSummary(filter: ReportFilter): Promise<ReportSummary>;
   getDegrees(): Promise<{ value: string; label: string }[]>;
 }
+ 

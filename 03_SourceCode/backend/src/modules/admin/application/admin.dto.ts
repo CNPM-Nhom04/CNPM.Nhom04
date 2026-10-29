@@ -73,6 +73,14 @@ export class AuditQueryDto extends AdminListQueryDto {
   selectedAction?: string;
 }
 export class UserInputDto {
+  @ApiPropertyOptional({
+    enum: ["KEEP", "UNIT", "GLOBAL", "NONE"],
+    default: "KEEP",
+  })
+  @IsOptional()
+  @IsIn(["KEEP", "UNIT", "GLOBAL", "NONE"])
+  scopeMode: "KEEP" | "UNIT" | "GLOBAL" | "NONE" = "KEEP";
+
   @ApiProperty()
   @IsString()
   @Transform(trim)
@@ -84,9 +92,9 @@ export class UserInputDto {
   @IsEmail()
   @MaxLength(255)
   email: string;
-  @ApiProperty({ description: "ID đơn vị trong database" })
+  @ApiProperty({ description: "ID đơn vị; chuỗi rỗng khi không gắn đơn vị" })
   @IsString()
-  @Matches(/^[1-9]\d{0,19}$/)
+  @Matches(/^(?:|[1-9]\d{0,19})$/)
   donViId: string;
   @ApiProperty({ enum: USER_ROLES })
   @IsIn(USER_ROLES)
@@ -96,6 +104,12 @@ export class UserInputDto {
   trangThai = true;
 }
 export class CreateUserDto extends UserInputDto {
+  @ApiProperty({ description: "Xác nhận mật khẩu ban đầu" })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(72)
+  confirmPassword: string;
+
   @ApiProperty({ minLength: 3, maxLength: 100 })
   @IsString()
   @Transform(trim)
@@ -166,3 +180,4 @@ export class SettingsDto {
   @MaxLength(255)
   ngoaiNguBatBuocTienSi: string;
 }
+ 
