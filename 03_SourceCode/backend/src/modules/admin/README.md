@@ -175,3 +175,8 @@ audit bất biến và tài khoản thử đã xóa mềm được giữ lại.
 Có thể đổi FRONTEND_URL và ADMIN_TEST_BACKEND_URL khi chạy.
 Không chạy bài tích hợp trên database production.
  
+
+Unit-transfer safeguard: if all current data scopes are ORG_UNIT, changing the work
+unit while keeping scopeMode=KEEP is rejected. Choose UNIT to move data access with
+the new work unit, or another explicit scope choice if authorized. The UI displays
+a reminder. Changing a label alone must not leave a user assigned to the old faculty.

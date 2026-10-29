@@ -344,6 +344,22 @@ export class MysqlAdminRepository extends AdminRepository {
   ): Promise<UserItem> {
     return this.write(actor, async (manager) => {
       const old = await this.getUser(manager, id);
+      if (
+        input.donViId !== old.donViId &&
+        (!input.scopeMode || input.scopeMode === "KEEP")
+      ) {
+        const [scope] = await manager.query(
+          "SELECT COUNT(*) total,SUM(scope_type='ORG_UNIT') unitCount FROM user_scopes WHERE user_id=?",
+          [id],
+        );
+        if (
+          Number(scope.total) > 0 &&
+          Number(scope.total) === Number(scope.unitCount)
+        )
+          throw new BadRequestException(
+            "Khi chuyển đơn vị, hãy chọn lại phạm vi dữ liệu (Đơn vị công tác và đơn vị con), tránh giữ nhầm quyền khoa cũ.",
+          );
+      }
       const [emailConflict] = await manager.query(
         "SELECT id FROM users WHERE id<>? AND (username=? OR email=?) LIMIT 1",
         [id, input.email, input.email],
@@ -686,4 +702,3 @@ export class MysqlAdminRepository extends AdminRepository {
     );
   }
 }
- 

@@ -24,9 +24,12 @@ export function canAccessDashboard(user: SessionUser | null, pathname: string) {
   if (!user) return false;
   if (pathname.startsWith("/dashboard/admin") && !user.roles.includes("ADMIN"))
     return false;
+  if (pathname === "/dashboard/chuong-trinh-dao-tao/tao-moi")
+    return user.permissions.includes("PROGRAM_EDIT");
+  if (/^\/dashboard\/chuong-trinh-dao-tao\/[^/]+\/xet-duyet$/.test(pathname))
+    return user.permissions.includes("PROGRAM_APPROVE");
   const route = Object.keys(routePermissions).find(
     (path) => pathname === path || pathname.startsWith(path + "/"),
   );
   return !route || user.permissions.includes(routePermissions[route]);
 }
- 

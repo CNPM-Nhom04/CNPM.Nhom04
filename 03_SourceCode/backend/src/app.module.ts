@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { ReportsModule } from "./modules/reports/reports.module";
+import { ProgramModule } from "./modules/programs/program.module";
 import { AdminModule } from "./modules/admin/admin.module";
 
 @Module({
@@ -26,6 +27,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     IdentityModule,
     ReportsModule,
     AdminModule,
+    ProgramModule,
   ],
   controllers: [],
   providers: [],

@@ -59,3 +59,10 @@ Desktop.ini
 # 6. Báo cáo Test (Coverage)
 coverage/
 .nyc_output/
+
+# Private uploaded program-review documents
+/03_SourceCode/backend/storage/
+
+# Keep the Next.js curriculum-builder source route (not generated build output).
+!/03_SourceCode/frontend/app/dashboard/chuong-trinh-dao-tao/**/build/
+!/03_SourceCode/frontend/app/dashboard/chuong-trinh-dao-tao/**/build/**

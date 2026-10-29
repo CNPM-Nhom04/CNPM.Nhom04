@@ -85,7 +85,7 @@ Các màn hình không hiển thị toàn bộ bảng/cột SQL:
 - Nhật ký: audit_logs, chỉ đọc/xuất, giữ bản ghi cũ và phân trang.
 - Báo cáo: một dòng mỗi training_programs, chọn phiên bản mới nhất theo cohort/created_at/id;
   vẫn có chương trình chưa có phiên bản. Tổng học viên tính assignment ACTIVE trong phạm vi;
-  SQL chỉ cho phép mỗi học viên có một assignment ACTIVE. Học viên được đếm DISTINCT trong từng chương trình. Học phần ngân hàng là tổng ACTIVE.
+  SQL chỉ cho phép mỗi học viên có một assignment ACTIVE. Học viên được đếm DISTINCT trong từng chương trình. Học phần ngân hàng là tổng ACTIVE trong vw_user_course_access của tài khoản.
 - Bản dữ liệu mẫu có 3 chương trình, 4 phiên bản. Admin GLOBAL thấy 3 chương trình;
   officer.fit theo đơn vị thấy 2. Số ít hơn do scope không có nghĩa là truy vấn bỏ sót.
 
