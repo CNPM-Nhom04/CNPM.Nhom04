@@ -5,6 +5,8 @@ import { AdminSupport1793059200000 } from "./migrations/1793059200000-AdminSuppo
 
 import { AuthSessions1793208000000 } from "./migrations/1793208000000-AuthSessions";
 
+import { ProgramUi1793145600000 } from "./migrations/1793145600000-ProgramUi";
+
 export default new DataSource({
   type: "mysql",
   host: process.env.DB_HOST,
@@ -14,7 +16,10 @@ export default new DataSource({
   database: process.env.DB_DATABASE,
   timezone: "Z",
   synchronize: false,
-  migrations: [AdminSupport1793059200000, AuthSessions1793208000000],
+  migrations: [
+    AdminSupport1793059200000,
+    AuthSessions1793208000000,
+    ProgramUi1793145600000,
+  ],
   migrationsTransactionMode: "none",
 });
- 

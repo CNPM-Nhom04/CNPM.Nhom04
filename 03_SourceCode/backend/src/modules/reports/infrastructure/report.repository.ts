@@ -101,12 +101,18 @@ export class MysqlReportRepository implements ReportRepository {
       `
       SELECT COUNT(*) AS tongChuongTrinh,
         COALESCE(SUM(r.soHocVien), 0) AS tongHocVien,
-        (SELECT COUNT(*) FROM courses WHERE status = 'ACTIVE') AS tongHocPhan,
+        (SELECT COUNT(*) FROM courses c WHERE c.status = 'ACTIVE'
+          AND (? IS NULL OR EXISTS(SELECT 1 FROM vw_user_course_access ca
+            WHERE ca.user_id=? AND ca.course_id=c.id))) AS tongHocPhan,
         COALESCE(ROUND(100.0 * SUM(CASE WHEN r.status = 'PUBLISHED' THEN 1 ELSE 0 END)
           / NULLIF(COUNT(*), 0), 1), 0) AS tyLeHoanThanh
       FROM (${BASE_QUERY}) r
     `,
-      this.parameters(filter),
+      [
+        filter.actorId || null,
+        filter.actorId || null,
+        ...this.parameters(filter),
+      ],
     );
     return {
       tongChuongTrinh: Number(row.tongChuongTrinh),
@@ -122,4 +128,3 @@ export class MysqlReportRepository implements ReportRepository {
     );
   }
 }
- 

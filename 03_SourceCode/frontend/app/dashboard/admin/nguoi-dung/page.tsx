@@ -479,6 +479,12 @@ export default function NguoiDungPage() {
             >
               Phạm vi dữ liệu
             </label>
+            {editingItem && formData.donViId !== editingItem.donViId && (
+              <p className="text-xs font-medium text-amber-800" role="status">
+                Khi chuyển khoa, chọn “Đơn vị công tác và đơn vị con” để cấp
+                quyền theo khoa mới.
+              </p>
+            )}
             {editingItem && (
               <p className="text-xs text-slate-600">
                 Phạm vi hiện tại:{" "}
@@ -601,4 +607,3 @@ export default function NguoiDungPage() {
     </div>
   );
 }
- 
