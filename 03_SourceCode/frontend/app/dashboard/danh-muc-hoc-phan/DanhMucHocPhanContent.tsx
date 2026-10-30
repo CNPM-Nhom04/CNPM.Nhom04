@@ -1,288 +1,608 @@
 "use client";
-
-import { useState } from "react";
-import { BookOpen, Plus, Search, Edit3, Trash2 } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { BookOpen, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
+import {
+  courseService,
+  CourseItem,
+  CourseDetail,
+  CourseList,
+  CourseUnit,
+} from "@/lib/services/courseService";
 
-interface HocPhanItem {
-  id: string;
-  maHocPhan: string;
-  tenHocPhan: string;
-  soTinChi: number;
-  loaiHocPhan: "BAT_BUOC" | "TU_CHON";
-  khoiKienThuc: string;
-  moTa: string;
-}
-
-export default function DanhMucHocPhanContent({
-  initialData,
-}: {
-  initialData: HocPhanItem[];
-}) {
-  const [hocPhanList, setHocPhanList] = useState<HocPhanItem[]>(initialData);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState("ALL");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const [formData, setFormData] = useState({
-    maHocPhan: "",
-    tenHocPhan: "",
-    soTinChi: 3,
-    loaiHocPhan: "BAT_BUOC" as HocPhanItem["loaiHocPhan"],
-    khoiKienThuc: "Kiến thức chuyên ngành",
-    moTa: "",
-  });
-
-  const filteredData = hocPhanList.filter((item) => {
-    const matchesSearch =
-      item.tenHocPhan.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.maHocPhan.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType =
-      selectedType === "ALL" || item.loaiHocPhan === selectedType;
-    return matchesSearch && matchesType;
-  });
-
-  const handleDelete = (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa học phần này khỏi danh mục?")) {
-      setHocPhanList(hocPhanList.filter((hp) => hp.id !== id));
-    }
-  };
-
-  const handleSaveHocPhan = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newItem: HocPhanItem = {
-      id: `hp-${Date.now()}`,
-      ...formData,
+const control =
+  "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-950 disabled:bg-slate-100 disabled:text-slate-700";
+const labels: Record<string, string> = {
+  ACTIVE: "Đang sử dụng",
+  INACTIVE: "Đã khóa",
+  RETIRED: "Ngừng dùng",
+  DRAFT: "Bản nháp",
+};
+const message = (error: unknown) =>
+  error instanceof Error ? error.message : "Không thể thực hiện yêu cầu.";
+const blankForm = () => ({
+  courseCode: "",
+  unitId: "",
+  courseName: "",
+  englishName: "",
+  credits: "",
+  theoryHours: "",
+  practiceHours: "",
+  description: "",
+  effectiveFrom: "",
+  effectiveTo: "",
+});
+export default function DanhMucHocPhanContent() {
+  const [list, setList] = useState<CourseList | null>(null);
+  const [units, setUnits] = useState<CourseUnit[]>([]);
+  const [unitsError, setUnitsError] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [unitId, setUnitId] = useState("");
+  const [page, setPage] = useState(1);
+  const [reload, setReload] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [selected, setSelected] = useState<CourseDetail | null>(null);
+  const [editing, setEditing] = useState<CourseDetail | "new" | null>(null);
+  const [form, setForm] = useState(blankForm);
+  const [formError, setFormError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const abort = new AbortController();
+    courseService
+      .units(abort.signal)
+      .then((data) => {
+        setUnits(data);
+        setUnitsError("");
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setUnitsError(message(e));
+      });
+    return () => abort.abort();
+  }, [reload]);
+  useEffect(() => {
+    const abort = new AbortController();
+    setLoading(true);
+    setError("");
+    const timer = setTimeout(() => {
+      courseService
+        .list(search, status, unitId, page, abort.signal)
+        .then(setList)
+        .catch((e) => {
+          if (!abort.signal.aborted) setError(message(e));
+        })
+        .finally(() => {
+          if (!abort.signal.aborted) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
     };
-    setHocPhanList([newItem, ...hocPhanList]);
-    setIsModalOpen(false);
-    setFormData({
-      maHocPhan: "",
-      tenHocPhan: "",
-      soTinChi: 3,
-      loaiHocPhan: "BAT_BUOC",
-      khoiKienThuc: "Kiến thức chuyên ngành",
-      moTa: "",
-    });
-    alert("Thêm học phần mới thành công!");
-  };
-
+  }, [search, status, unitId, page, reload]);
+  function begin(item: CourseDetail | "new") {
+    setEditing(item);
+    setFormError("");
+    setDetailError("");
+    setNotice("");
+    setForm(
+      item === "new"
+        ? blankForm()
+        : {
+            courseCode: item.courseCode,
+            unitId: item.unitId,
+            courseName: item.courseName || "",
+            englishName: item.englishName || "",
+            credits: item.credits == null ? "" : String(item.credits),
+            theoryHours:
+              item.theoryHours == null ? "" : String(item.theoryHours),
+            practiceHours:
+              item.practiceHours == null ? "" : String(item.practiceHours),
+            description: item.description || "",
+            effectiveFrom: "",
+            effectiveTo: "",
+          },
+    );
+  }
+  async function view(item: CourseItem) {
+    setBusy(true);
+    setError("");
+    setDetailError("");
+    try {
+      setSelected(await courseService.detail(item.id));
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!editing || busy) return;
+    setBusy(true);
+    setFormError("");
+    const input = {
+      courseName: form.courseName,
+      englishName: form.englishName,
+      credits: Number(form.credits),
+      theoryHours: Number(form.theoryHours),
+      practiceHours: Number(form.practiceHours),
+      description: form.description,
+      effectiveFrom: form.effectiveFrom,
+      ...(form.effectiveTo ? { effectiveTo: form.effectiveTo } : {}),
+    };
+    try {
+      const result =
+        editing === "new"
+          ? await courseService.create({
+              ...input,
+              courseCode: form.courseCode,
+              unitId: form.unitId,
+            })
+          : await courseService.revise(editing.id, {
+              ...input,
+              expectedLatestVersionId: editing.latestVersionId || "0",
+            });
+      setEditing(null);
+      setSelected(result);
+      setNotice(
+        "Đã lưu bản nháp vào CSDL. Kiểm tra chi tiết trước khi kích hoạt.",
+      );
+      setReload((n) => n + 1);
+    } catch (e) {
+      setFormError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function mutate(action: "activate" | "status") {
+    if (!selected || busy) return;
+    const prompt =
+      action === "activate"
+        ? "Kích hoạt bản nháp mới nhất? Bản ACTIVE cũ sẽ ngừng dùng; các CTĐT cũ vẫn giữ phiên bản đã chọn."
+        : selected.status === "ACTIVE"
+          ? "Khóa học phần khỏi danh mục sử dụng mới? Toàn bộ lịch sử vẫn được giữ."
+          : "Mở sử dụng lại học phần này?";
+    if (!window.confirm(prompt)) return;
+    setBusy(true);
+    setDetailError("");
+    try {
+      const result =
+        action === "activate"
+          ? await courseService.activate(selected.id, selected.latestVersionId!)
+          : await courseService.status(
+              selected.id,
+              selected.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+              selected.status,
+            );
+      setSelected(result);
+      setReload((n) => n + 1);
+      setNotice("Đã cập nhật CSDL.");
+    } catch (e) {
+      setDetailError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const set = (key: keyof ReturnType<typeof blankForm>, value: string) =>
+    setForm((old) => ({ ...old, [key]: value }));
+  const input = (
+    key: keyof ReturnType<typeof blankForm>,
+    label: string,
+    type = "text",
+    options: {
+      required?: boolean;
+      maxLength?: number;
+      min?: number;
+      max?: number;
+      step?: string;
+    } = {},
+  ) => (
+    <label className="block space-y-1 text-sm font-medium text-slate-800">
+      {label}
+      <input
+        aria-label={label}
+        type={type}
+        className={control}
+        value={form[key]}
+        disabled={busy}
+        onChange={(e) => set(key, e.target.value)}
+        {...options}
+      />
+    </label>
+  );
   return (
-    <div className="space-y-6 pb-16">
-      {/* 1. Header tiêu đề & Nút Thêm Học Phần Mới */}
-      <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5 pb-16 text-slate-950">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-950 flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            Danh Mục Học Phần SĐH
+          <h1 className="flex items-center gap-2 text-xl font-bold">
+            <BookOpen className="text-blue-600" />
+            Danh Mục Học Phần
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Quản lý ngân hàng môn học, số tín chỉ và phân loại khối kiến thức
-            đào tạo từ cơ sở dữ liệu
+          <p className="mt-1 text-sm text-slate-600">
+            Ngân hàng học phần, phiên bản nội dung và đơn vị quản lý.
           </p>
         </div>
-        <Button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
+        {list?.permissions.canManage && (
+          <Button disabled={busy} onClick={() => begin("new")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Thêm học phần mới
+          </Button>
+        )}
+      </div>
+      <p className="text-sm text-slate-600">
+        Bắt buộc/tự chọn và khối kiến thức được xác định khi xếp học phần vào
+        từng CTĐT.
+      </p>
+      {notice && (
+        <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">
+          {notice}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4">
+        <label className="flex min-w-64 flex-1 items-center gap-2">
+          <Search className="h-4 w-4 text-slate-500" />
+          <input
+            aria-label="Tìm học phần"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Tìm mã, tên học phần hoặc tên tiếng Anh..."
+            className={control}
+            maxLength={255}
+          />
+        </label>
+        <select
+          aria-label="Lọc trạng thái"
+          className={control + " md:w-48"}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
         >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Thêm Học Phần Mới
+          <option value="ALL">Tất cả trạng thái</option>
+          <option value="ACTIVE">Đang sử dụng</option>
+          <option value="INACTIVE">Đã khóa</option>
+          <option value="RETIRED">Ngừng dùng</option>
+        </select>
+        <select
+          aria-label="Lọc đơn vị"
+          className={control + " md:w-72"}
+          value={unitId}
+          onChange={(e) => {
+            setUnitId(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">Tất cả đơn vị trong phạm vi</option>
+          {units.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="outline"
+          onClick={() => setReload((n) => n + 1)}
+          disabled={loading}
+        >
+          Tải lại
         </Button>
       </div>
-
-      {/* 2. Tìm kiếm & Bộ lọc */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo mã hoặc tên học phần..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {unitsError && (
+        <p role="alert" className="text-red-700">
+          Không tải được đơn vị: {unitsError}
+        </p>
+      )}
+      {error ? (
+        <div role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">
+          {error}
+          <Button variant="outline" onClick={() => setReload((n) => n + 1)}>
+            Thử lại
+          </Button>
         </div>
-
-        <select
-          value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
-          className="w-full md:w-52 h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-        >
-          <option value="ALL">Tất cả loại học phần</option>
-          <option value="BAT_BUOC">Bắt buộc</option>
-          <option value="TU_CHON">Tự chọn</option>
-        </select>
-      </div>
-
-      {/* 3. Bảng danh sách học phần */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm table-fixed">
-            <thead>
-              <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
-                <th className="w-32 px-5 py-3.5">Mã Môn</th>
-                <th className="w-64 px-5 py-3.5">Tên Học Phần</th>
-                <th className="w-24 px-4 py-3.5 text-center">Số Tín Chỉ</th>
-                <th className="w-36 px-4 py-3.5 text-center">Loại HP</th>
-                <th className="w-56 px-5 py-3.5">Khối Kiến Thức</th>
-                <th className="px-5 py-3.5">Mô Tả</th>
-                <th className="w-28 px-5 py-3.5 text-right">Thao Tác</th>
+      ) : loading ? (
+        <p role="status">Đang tải dữ liệu học phần...</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-700">
+              <tr>
+                <th className="p-4">Mã học phần</th>
+                <th className="p-4">Phiên bản mới nhất</th>
+                <th className="p-4">Tín chỉ</th>
+                <th className="p-4">Đơn vị quản lý</th>
+                <th className="p-4">Trạng thái học phần</th>
+                <th className="p-4">Phiên bản ACTIVE</th>
+                <th className="p-4">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredData.length > 0 ? (
-                filteredData.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-slate-50/80 transition-colors"
-                  >
-                    <td className="px-5 py-4 font-bold text-blue-600 truncate">
-                      {item.maHocPhan}
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-slate-900 truncate">
-                      {item.tenHocPhan}
-                    </td>
-                    <td className="px-4 py-4 text-center font-bold text-slate-800">
-                      {item.soTinChi}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                        Bắt buộc
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-slate-700 text-xs font-medium truncate">
-                      {item.khoiKienThuc}
-                    </td>
-                    <td className="px-5 py-4 text-slate-500 text-xs truncate">
-                      {item.moTa}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer">
-                          <Edit3 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+              {list?.data.map((item) => (
+                <tr key={item.id}>
+                  <td className="p-4 font-semibold text-blue-700">
+                    {item.courseCode}
+                  </td>
+                  <td className="p-4">
+                    <strong>{item.courseName || "Chưa có phiên bản"}</strong>
+                    {item.versionNo && (
+                      <div className="text-xs text-slate-600">
+                        v{item.versionNo} ·{" "}
+                        {labels[item.versionStatus!] || item.versionStatus}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+                    )}
+                  </td>
+                  <td className="p-4">{item.credits ?? "—"}</td>
+                  <td className="p-4">{item.unitName}</td>
+                  <td className="p-4">{labels[item.status]}</td>
+                  <td className="p-4">
+                    {item.activeVersionId ? (
+                      <span>
+                        v{item.activeVersionNo} · {item.activeCredits} TC
+                      </span>
+                    ) : (
+                      "Chưa có"
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => view(item)}
+                    >
+                      Chi tiết
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {!list?.data.length && (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-5 py-12 text-center text-slate-400"
-                  >
-                    Không tìm thấy học phần nào phù hợp trong cơ sở dữ liệu.
+                  <td colSpan={7} className="p-10 text-center text-slate-600">
+                    Không có học phần phù hợp trong phạm vi được cấp.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* 4. Modal Thêm Học Phần Mới */}
+      )}
+      {list && !error && !loading && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span>
+            Tổng {list.meta.total} học phần · Trang {page}/
+            {Math.max(1, list.meta.totalPages)}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Trang trước
+            </Button>
+            <Button
+              variant="outline"
+              disabled={page >= list.meta.totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Trang sau
+            </Button>
+          </div>
+        </div>
+      )}
       <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Thêm Học Phần Mới Vào Danh Mục"
-        description="Nhập thông tin mô tả chi tiết học phần để đưa vào chương trình đào tạo SĐH"
-        size="lg"
+        isOpen={!!selected && !editing}
+        onClose={() => {
+          if (!busy) {
+            setSelected(null);
+            setDetailError("");
+          }
+        }}
+        title={
+          selected
+            ? selected.courseCode + " — Chi tiết học phần"
+            : "Chi tiết học phần"
+        }
+        size="2xl"
+      >
+        {selected && (
+          <div className="space-y-4">
+            <p>
+              Đơn vị quản lý: <strong>{selected.unitName}</strong> ·{" "}
+              {labels[selected.status]}
+            </p>
+            {detailError && (
+              <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
+                {detailError}
+              </p>
+            )}
+            {selected.permissions.canManage && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={busy || selected.status !== "ACTIVE"}
+                  onClick={() => begin(selected)}
+                >
+                  Tạo bản sửa đổi
+                </Button>
+                {selected.versionStatus === "DRAFT" && (
+                  <Button
+                    disabled={busy || selected.status !== "ACTIVE"}
+                    onClick={() => mutate("activate")}
+                  >
+                    Kích hoạt bản nháp v{selected.versionNo}
+                  </Button>
+                )}
+                {selected.status !== "RETIRED" && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => mutate("status")}
+                  >
+                    {selected.status === "ACTIVE"
+                      ? "Khóa sử dụng"
+                      : "Mở sử dụng"}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => view(selected)}
+                >
+                  Tải lại chi tiết
+                </Button>
+              </div>
+            )}
+            <p className="text-sm text-slate-600">
+              Bản sửa đổi luôn tạo phiên bản mới. Các CTĐT và kết quả cũ giữ
+              nguyên ID phiên bản đã tham chiếu. Khóa sử dụng giữ toàn bộ lịch
+              sử.
+            </p>
+            <h2 className="font-bold">Lịch sử phiên bản từ CSDL</h2>
+            {selected.versions.length === 0 && <p>Chưa có phiên bản.</p>}
+            {selected.versions.map((v) => (
+              <article
+                key={v.id}
+                className="space-y-2 rounded-lg border border-slate-200 p-4 text-sm"
+              >
+                <h3 className="font-semibold">
+                  v{v.versionNo} — {v.courseName} · {labels[v.status]}
+                </h3>
+                <p>{v.englishName || "Chưa nhập tên tiếng Anh"}</p>
+                <p>
+                  {v.credits} tín chỉ · Lý thuyết {v.theoryHours} giờ · Thực
+                  hành {v.practiceHours} giờ
+                </p>
+                <p>
+                  Hiệu lực: {v.effectiveFrom} →{" "}
+                  {v.effectiveTo || "Chưa có ngày kết thúc"} · Tham chiếu trong{" "}
+                  {v.usageCount} vị trí CTĐT
+                </p>
+                <p className="whitespace-pre-wrap">
+                  {v.description || "Chưa nhập mô tả"}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </Modal>
+      <Modal
+        isOpen={!!editing}
+        onClose={() => {
+          if (!busy) setEditing(null);
+        }}
+        title={
+          editing === "new" ? "Thêm học phần mới" : "Tạo bản sửa đổi học phần"
+        }
+        size="xl"
         footer={
           <>
             <Button
-              type="button"
               variant="outline"
-              onClick={() => setIsModalOpen(false)}
+              disabled={busy}
+              onClick={() => setEditing(null)}
             >
               Hủy bỏ
             </Button>
-            <Button
-              type="submit"
-              form="hocphan-form"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            >
-              Lưu Học Phần
+            <Button form="course-form" type="submit" disabled={busy}>
+              {busy ? "Đang lưu..." : "Lưu bản nháp"}
             </Button>
           </>
         }
       >
-        <form
-          id="hocphan-form"
-          onSubmit={handleSaveHocPhan}
-          className="space-y-4"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Mã Học Phần
+        <form id="course-form" onSubmit={save} className="space-y-4">
+          {formError && (
+            <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
+              {formError}
+            </p>
+          )}
+          {editing === "new" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {input("courseCode", "Mã học phần", "text", {
+                required: true,
+                maxLength: 50,
+              })}
+              <label className="block space-y-1 text-sm font-medium text-slate-800">
+                Đơn vị quản lý
+                <select
+                  aria-label="Đơn vị quản lý"
+                  required
+                  className={control}
+                  value={form.unitId}
+                  onChange={(e) => set("unitId", e.target.value)}
+                  disabled={busy || !!unitsError}
+                >
+                  <option value="">Chọn đơn vị từ CSDL</option>
+                  {units
+                    .filter((u) => u.status === "ACTIVE")
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                </select>
               </label>
-              <input
-                type="text"
-                placeholder="Ví dụ: KTM703"
-                required
-                value={formData.maHocPhan}
-                onChange={(e) =>
-                  setFormData({ ...formData, maHocPhan: e.target.value })
-                }
-                className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Số Tín Chỉ
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={15}
-                required
-                value={formData.soTinChi}
-                onChange={(e) =>
-                  setFormData({ ...formData, soTinChi: Number(e.target.value) })
-                }
-                className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          ) : (
+            <p className="text-sm text-slate-700">
+              {form.courseCode} · {editing?.unitName}. Mã và đơn vị được giữ
+              nguyên để bảo toàn phạm vi và lịch sử.
+            </p>
+          )}
+          {input("courseName", "Tên học phần", "text", {
+            required: true,
+            maxLength: 255,
+          })}
+          {input("englishName", "Tên tiếng Anh", "text", { maxLength: 255 })}
+          <div className="grid gap-4 md:grid-cols-3">
+            {input("credits", "Số tín chỉ", "number", {
+              required: true,
+              min: 0.01,
+              max: 999.99,
+              step: "0.01",
+            })}
+            {input("theoryHours", "Giờ lý thuyết", "number", {
+              required: true,
+              min: 0,
+              max: 65535,
+              step: "1",
+            })}
+            {input("practiceHours", "Giờ thực hành", "number", {
+              required: true,
+              min: 0,
+              max: 65535,
+              step: "1",
+            })}
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Tên Học Phần
-            </label>
-            <input
-              type="text"
-              placeholder="Ví dụ: Xử lý dữ liệu lớn trong Y tế"
-              required
-              value={formData.tenHocPhan}
-              onChange={(e) =>
-                setFormData({ ...formData, tenHocPhan: e.target.value })
-              }
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="grid gap-4 md:grid-cols-2">
+            {input("effectiveFrom", "Ngày bắt đầu hiệu lực", "date", {
+              required: true,
+            })}
+            {input("effectiveTo", "Ngày kết thúc hiệu lực", "date")}
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Mô Tả Học Phần
-            </label>
+          <label className="block space-y-1 text-sm font-medium text-slate-800">
+            Mô tả học phần
             <textarea
-              rows={3}
-              placeholder="Nhập tóm tắt nội dung đề cương chi tiết học phần..."
-              value={formData.moTa}
-              onChange={(e) =>
-                setFormData({ ...formData, moTa: e.target.value })
-              }
-              className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            ></textarea>
-          </div>
+              aria-label="Mô tả học phần"
+              rows={4}
+              className={control}
+              maxLength={15000}
+              value={form.description}
+              disabled={busy}
+              onChange={(e) => set("description", e.target.value)}
+            />
+          </label>
+          <p className="text-sm text-slate-600">
+            Lưu ở trạng thái DRAFT. Chỉ kích hoạt khi đã đến ngày hiệu lực; bản
+            mới phải bắt đầu sau bản ACTIVE hiện tại. Không tự quy đổi tín chỉ
+            thành giờ.
+          </p>
         </form>
       </Modal>
     </div>
