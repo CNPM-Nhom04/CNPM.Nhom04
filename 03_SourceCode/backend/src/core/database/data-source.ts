@@ -7,6 +7,8 @@ import { AuthSessions1793208000000 } from "./migrations/1793208000000-AuthSessio
 
 import { ProgramUi1793145600000 } from "./migrations/1793145600000-ProgramUi";
 
+import { ThesisDefenses1793293200000 } from "./migrations/1793293200000-ThesisDefenses";
+
 export default new DataSource({
   type: "mysql",
   host: process.env.DB_HOST,
@@ -20,6 +22,7 @@ export default new DataSource({
     AdminSupport1793059200000,
     AuthSessions1793208000000,
     ProgramUi1793145600000,
+    ThesisDefenses1793293200000,
   ],
   migrationsTransactionMode: "none",
 });
