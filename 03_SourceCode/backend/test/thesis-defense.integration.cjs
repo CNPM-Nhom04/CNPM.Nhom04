@@ -118,6 +118,23 @@ async function student(unit, track) {
     "SELECT CAST(id AS CHAR) id FROM student_program_assignments WHERE student_id=? AND assignment_status='ACTIVE'",
     [s.id],
   );
+  // Approved topic fixtures exist only in this disposable defense test DB.
+  const [owner] = await db.query(
+    "SELECT p.managing_unit_id unitId FROM program_version_tracks t JOIN program_versions v ON v.id=t.program_version_id JOIN training_programs p ON p.id=v.program_id WHERE t.id=?",
+    [track],
+  );
+  await db.query(
+    "INSERT INTO thesis_supervisors(owning_unit_id,supervisor_code,full_name,created_by) VALUES(?,?,?,2)",
+    [owner.unitId, code, "Actual test supervisor"],
+  );
+  const [supervisor] = await db.query(
+    "SELECT CAST(id AS CHAR) id FROM thesis_supervisors WHERE owning_unit_id=? AND supervisor_code=?",
+    [owner.unitId, code],
+  );
+  await db.query(
+    "INSERT INTO thesis_topics(assignment_id,supervisor_id,student_name_snapshot,program_name_snapshot,supervisor_name_snapshot,title,status,created_by,reviewed_by,reviewed_at,review_note,decision_reference) SELECT ?,?,s.full_name,v.program_name_snapshot,'Actual test supervisor',?,'DANG_THUC_HIEN',2,3,UTC_TIMESTAMP(6),'Approved fixture on isolated copy','TEST-ONLY' FROM students s JOIN student_program_assignments a ON a.student_id=s.id JOIN program_version_tracks t ON t.id=a.program_version_track_id JOIN program_versions v ON v.id=t.program_version_id WHERE a.id=?",
+    [a.id, supervisor.id, marker + " actual topic", a.id],
+  );
   return {
     id: s.id,
     maHocVien: code,
@@ -212,7 +229,7 @@ async function rejectionSQL(sql, args) {
     );
     const seed = await api(prefix + "/hoc-vien?limit=100", it);
     const expected = await db.query(
-      "SELECT CAST(a.id AS CHAR) id FROM students s JOIN student_program_assignments a ON a.student_id=s.id AND a.assignment_status='ACTIVE' JOIN program_version_tracks t ON t.id=a.program_version_track_id JOIN program_versions v ON v.id=t.program_version_id JOIN training_programs p ON p.id=v.program_id JOIN education_levels e ON e.id=p.education_level_id JOIN thesis_defense_levels dl ON dl.education_level_id=e.id JOIN vw_user_program_access pa ON pa.user_id=? AND pa.program_id=p.id JOIN vw_user_student_access sa ON sa.user_id=? AND sa.student_id=s.id WHERE s.status='ACTIVE' AND t.status='ACTIVE' AND e.status='ACTIVE' AND p.status='ACTIVE' AND v.status IN ('PUBLISHED','ARCHIVED') AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.student_id=s.id AND d.status='CHO_BAO_VE') AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.assignment_id=a.id AND d.status='DA_DAT')",
+      "SELECT CAST(a.id AS CHAR) id FROM students s JOIN student_program_assignments a ON a.student_id=s.id AND a.assignment_status='ACTIVE' JOIN program_version_tracks t ON t.id=a.program_version_track_id JOIN program_versions v ON v.id=t.program_version_id JOIN training_programs p ON p.id=v.program_id JOIN education_levels e ON e.id=p.education_level_id JOIN thesis_defense_levels dl ON dl.education_level_id=e.id JOIN vw_user_program_access pa ON pa.user_id=? AND pa.program_id=p.id JOIN vw_user_student_access sa ON sa.user_id=? AND sa.student_id=s.id WHERE s.status='ACTIVE' AND t.status='ACTIVE' AND e.status='ACTIVE' AND p.status='ACTIVE' AND v.status IN ('PUBLISHED','ARCHIVED') AND EXISTS(SELECT 1 FROM thesis_topics topic WHERE topic.assignment_id=a.id AND topic.status='DANG_THUC_HIEN') AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.student_id=s.id AND d.status='CHO_BAO_VE') AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.assignment_id=a.id AND d.status='DA_DAT')",
       [it.id, it.id],
     );
     same(

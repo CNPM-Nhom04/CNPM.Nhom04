@@ -10,7 +10,7 @@ const routePermissions: Record<string, string> = {
   "/dashboard/chuong-trinh-dao-tao": "PROGRAM_READ",
   "/dashboard/xet-duyet": "PROGRAM_APPROVE",
   "/dashboard/so-sanh": "PROGRAM_COMPARE",
-  "/dashboard/de-tai-luan-van": "STUDENT_MANAGE",
+  "/dashboard/de-tai-luan-van": "TOPIC_READ",
   "/dashboard/bao-ve-luan-van": "DEFENSE_READ",
   "/dashboard/dang-ky-hoc-phan": "REGISTRATION_MANAGE",
   "/dashboard/sinh-vien/dang-ky": "COURSE_REGISTER",

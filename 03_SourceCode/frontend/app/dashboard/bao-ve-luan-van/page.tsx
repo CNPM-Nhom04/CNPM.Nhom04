@@ -610,6 +610,7 @@ export default function BaoVeLuanVanPage() {
                     ...formData,
                     maHocVien: student?.maHocVien ?? "",
                     assignmentId: student?.assignmentId ?? "",
+                    tenDeTai: student?.topicTitle ?? "",
                   });
                 }}
                 className={fieldClass}
@@ -720,6 +721,7 @@ export default function BaoVeLuanVanPage() {
                   </label>
                   <input
                     id={field.key}
+                    readOnly={field.key === "tenDeTai"}
                     type={field.type || "text"}
                     min={field.type === "date" ? policy?.today : undefined}
                     required={field.required}

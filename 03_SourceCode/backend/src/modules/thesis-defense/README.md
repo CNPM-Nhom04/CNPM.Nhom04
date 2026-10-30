@@ -13,8 +13,8 @@ Migration 1793293200000-ThesisDefenses adds:
 
 - thesis_defense_levels: eligible education-level references; initialized only from
   existing MASTER/PHD/DOCTOR/DOCTORATE rows, never fictitious students or degrees.
-- thesis_defenses: exact assignment and track, identity/program snapshots, entered
-  thesis title and council, eligibility evidence, date/location, threshold and result,
+- thesis_defenses: exact assignment and track, identity/program snapshots, SQL-linked
+  approved thesis title and entered council, eligibility evidence, date/location, threshold and result,
   cancellation metadata and actors. Foreign keys, generated unique keys and triggers
   preserve consistency and immutable finalized history.
 - DEFENSE_READ, DEFENSE_SCHEDULE and DEFENSE_RESULT permissions and explicit role grants.
@@ -33,7 +33,7 @@ create. Invalid stored configuration is an error, not a silent fallback.
 Each schedule stores its own immutable passing_score; later policy changes do not
 reclassify an existing schedule. An unscored defense has NULL, distinct from score 0.
 
-The schema does not prove language certificates, plagiarism approval, thesis approval
+The schema does not verify the authenticity of language certificates, plagiarism checks
 or all formal defense eligibility conditions. Active enrollment is not advertised as
 proof of academic eligibility. Staff must verify actual documents, enter eligibilityNote
 and explicitly confirm eligibilityConfirmed=true. This is recorded with created_by and
@@ -161,3 +161,13 @@ ORDER BY d.id DESC;
 
 This SQL is an administrator view; application results additionally enforce the
 logged-in user's permission and scope. No rows is expected before actual scheduling.
+
+## Liên kết đề tài từ migration 1793340000000-ThesisTopics
+
+Lịch mới chỉ được lập khi exact assignment có đề tài DANG_THUC_HIEN.
+GET hoc-vien lọc điều kiện này và trả topicTitle. Frontend điền tên chỉ đọc.
+Backend lấy lại title/topic_id từ SQL trong transaction, không tin tên client nhập.
+Kết quả đạt liên kết đúng đề tài là điều kiện để lãnh đạo xác nhận nghiệm thu.
+Lịch cũ topic_id NULL vẫn giữ nguyên dữ liệu và được xử lý như lịch sử cũ;
+không tự gán hoặc dùng để nghiệm thu đề tài mới. Không thay đổi quy tắc điểm đạt.
+Test integration bảo vệ đã bổ sung fixture đề tài được duyệt trên DB test riêng.
