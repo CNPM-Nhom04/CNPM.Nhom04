@@ -238,7 +238,7 @@ export class MysqlProgramRepository extends ProgramRepository {
   async catalog(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "";
     const where =
-      " FROM course_versions cv JOIN courses c ON c.id=cv.course_id WHERE cv.status='ACTIVE' AND c.status='ACTIVE' AND EXISTS(SELECT 1 FROM vw_user_course_access ca WHERE ca.user_id=? AND ca.course_id=c.id) AND (?='' OR LOCATE(?,c.course_code)>0 OR LOCATE(?,cv.course_name)>0)";
+      " FROM course_versions cv JOIN courses c ON c.id=cv.course_id WHERE cv.status='ACTIVE' AND c.status='ACTIVE' AND cv.effective_from<=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR) AND (cv.effective_to IS NULL OR cv.effective_to>=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR)) AND EXISTS(SELECT 1 FROM vw_user_course_access ca WHERE ca.user_id=? AND ca.course_id=c.id) AND (?='' OR LOCATE(?,c.course_code)>0 OR LOCATE(?,cv.course_name)>0)";
     const data = await this.db.query(
       `SELECT CAST(cv.id AS CHAR) AS id,CAST(c.id AS CHAR) AS courseId,c.course_code AS code,cv.course_name AS name,cv.credits,cv.theory_hours AS theoryHours,cv.practice_hours AS practiceHours` +
         where +
@@ -757,8 +757,8 @@ export class MysqlProgramRepository extends ProgramRepository {
             );
           const [version] = await manager.query(
             `SELECT CAST(cv.course_id AS CHAR) AS courseId FROM course_versions cv JOIN courses c ON c.id=cv.course_id
-            WHERE cv.id=? AND c.status='ACTIVE' AND (
-              (cv.status='ACTIVE' AND EXISTS(SELECT 1 FROM vw_user_course_access ca
+            WHERE cv.id=? AND (
+              (c.status='ACTIVE' AND cv.status='ACTIVE' AND cv.effective_from<=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR) AND (cv.effective_to IS NULL OR cv.effective_to>=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR)) AND EXISTS(SELECT 1 FROM vw_user_course_access ca
                 WHERE ca.user_id=? AND ca.course_id=c.id))
               OR EXISTS(SELECT 1 FROM curriculum_courses cc
                 WHERE cc.program_version_track_id=? AND cc.course_version_id=cv.id))`,

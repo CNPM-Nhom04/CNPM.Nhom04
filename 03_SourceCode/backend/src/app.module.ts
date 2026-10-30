@@ -5,6 +5,7 @@ import { IdentityModule } from "./modules/identity/identity.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { ThesisDefenseModule } from "./modules/thesis-defense/thesis-defense.module";
 import { ProgramModule } from "./modules/programs/program.module";
+import { CourseModule } from "./modules/courses/course.module";
 import { AdminModule } from "./modules/admin/admin.module";
 
 @Module({
@@ -30,6 +31,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     AdminModule,
     ProgramModule,
     ThesisDefenseModule,
+    CourseModule,
   ],
   controllers: [],
   providers: [],
