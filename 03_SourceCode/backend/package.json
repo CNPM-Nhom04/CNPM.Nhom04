@@ -28,7 +28,10 @@
     "test:course-parity": "node test/course-data-parity.cjs",
     "test:topic-integration": "node test/thesis-topic.integration.cjs",
     "test:topic-parity": "node test/thesis-topic-parity.cjs",
-    "test:topic-browser": "node test/thesis-topic.browser.cjs"
+    "test:topic-browser": "node test/thesis-topic.browser.cjs",
+    "test:grade-integration": "node test/grade.integration.cjs",
+    "test:grade-parity": "node test/grade-data-parity.cjs",
+    "test:grade-browser": "node test/grade.browser.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

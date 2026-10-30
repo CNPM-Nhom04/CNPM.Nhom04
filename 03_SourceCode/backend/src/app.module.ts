@@ -6,6 +6,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { ThesisDefenseModule } from "./modules/thesis-defense/thesis-defense.module";
 import { ProgramModule } from "./modules/programs/program.module";
 import { ThesisTopicModule } from "./modules/thesis-topic/thesis-topic.module";
+import { GradeModule } from "./modules/grades/grade.module";
 import { CourseModule } from "./modules/courses/course.module";
 import { AdminModule } from "./modules/admin/admin.module";
 
@@ -33,6 +34,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     ProgramModule,
     ThesisDefenseModule,
     CourseModule,
+    GradeModule,
     ThesisTopicModule,
   ],
   controllers: [],
