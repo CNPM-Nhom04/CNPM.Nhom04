@@ -25,7 +25,10 @@
     "test:program-scope": "node test/program-scope.integration.cjs",
     "test:defense-integration": "node test/thesis-defense.integration.cjs",
     "test:course-integration": "node test/course.integration.cjs",
-    "test:course-parity": "node test/course-data-parity.cjs"
+    "test:course-parity": "node test/course-data-parity.cjs",
+    "test:topic-integration": "node test/thesis-topic.integration.cjs",
+    "test:topic-parity": "node test/thesis-topic-parity.cjs",
+    "test:topic-browser": "node test/thesis-topic.browser.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

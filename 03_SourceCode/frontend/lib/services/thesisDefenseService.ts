@@ -1,5 +1,6 @@
 export type DefenseStatus = "CHO_BAO_VE" | "DA_DAT" | "CHUA_DAT" | "DA_HUY";
 export interface StudentOption {
+  topicTitle?: string;
   assignmentId: string;
   programVersionTrackId: string;
   programCode: string;

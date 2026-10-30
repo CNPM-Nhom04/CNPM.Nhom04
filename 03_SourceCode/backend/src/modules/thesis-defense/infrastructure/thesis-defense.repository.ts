@@ -25,7 +25,7 @@ const DEFENSE_FROM = ` FROM thesis_defenses d JOIN students s ON s.id=d.student_
  JOIN training_programs p ON p.id=v.program_id JOIN education_levels e ON e.id=p.education_level_id
  JOIN organizational_units u ON u.id=p.managing_unit_id JOIN majors m ON m.id=p.major_id`;
 const DEFENSE_SELECT =
-  `SELECT CAST(d.id AS CHAR) id,CAST(d.assignment_id AS CHAR) assignmentId,
+  `SELECT CAST(d.id AS CHAR) id,CAST(d.topic_id AS CHAR) topicId,CAST(d.assignment_id AS CHAR) assignmentId,
  CAST(d.program_version_track_id AS CHAR) programVersionTrackId,s.student_code maHocVien,
  d.student_name_snapshot hoTen,d.program_name_snapshot chuyenNganh,p.program_code programCode,
  e.level_name levelName,u.unit_name unitName,m.major_name majorName,
@@ -133,14 +133,14 @@ export class MysqlDefenseRepository extends DefenseRepository {
   }
   async students(query: DefenseQuery, actor: DefenseActor) {
     const search = query.searchTerm || "";
-    const where = ` AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.student_id=s.id AND d.status='CHO_BAO_VE')
+    const where = ` AND EXISTS(SELECT 1 FROM thesis_topics topic WHERE topic.assignment_id=a.id AND topic.status='DANG_THUC_HIEN') AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.student_id=s.id AND d.status='CHO_BAO_VE')
    AND NOT EXISTS(SELECT 1 FROM thesis_defenses d WHERE d.assignment_id=a.id AND d.status='DA_DAT')
    AND (?='' OR LOCATE(?,s.student_code)>0 OR LOCATE(?,s.full_name)>0)`;
     const params = [...this.scope(actor), search, search, search];
     const rows = await this.db.query(
       `SELECT CAST(a.id AS CHAR) assignmentId,CAST(t.id AS CHAR) programVersionTrackId,
    s.student_code maHocVien,s.full_name hoTen,v.program_name_snapshot chuyenNganh,p.program_code programCode,
-   e.level_name levelName,u.unit_name unitName,m.major_name majorName` +
+   e.level_name levelName,u.unit_name unitName,m.major_name majorName,(SELECT topic.title FROM thesis_topics topic WHERE topic.assignment_id=a.id AND topic.status='DANG_THUC_HIEN') topicTitle` +
         STUDENT_FROM +
         where +
         " ORDER BY s.student_code LIMIT ? OFFSET ?",
@@ -262,6 +262,14 @@ export class MysqlDefenseRepository extends DefenseRepository {
         throw new NotFoundException(
           "Hồ sơ học viên hoặc chương trình đang học không còn phù hợp/trong phạm vi. Hãy chọn lại học viên.",
         );
+      const [topic] = await manager.query(
+        "SELECT CAST(id AS CHAR) topicId,title FROM thesis_topics WHERE assignment_id=? AND status='DANG_THUC_HIEN' FOR UPDATE",
+        [student.assignmentId],
+      );
+      if (!topic)
+        throw new ConflictException(
+          "Học viên chưa có đề tài được duyệt cho phân CTĐT này.",
+        );
       const [existing] = await manager.query(
         "SELECT id FROM thesis_defenses WHERE (student_id=? AND status='CHO_BAO_VE') OR (assignment_id=? AND status='DA_DAT') LIMIT 1",
         [student.studentId, student.assignmentId],
@@ -277,15 +285,16 @@ export class MysqlDefenseRepository extends DefenseRepository {
         );
       await manager.query(
         `INSERT INTO thesis_defenses(student_id,assignment_id,program_version_track_id,student_name_snapshot,program_name_snapshot,
-    thesis_title,defense_date,location,council_chair,reviewer,secretary,eligibility_note,passing_score,created_by)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    topic_id,thesis_title,defense_date,location,council_chair,reviewer,secretary,eligibility_note,passing_score,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           student.studentId,
           student.assignmentId,
           student.trackId,
           student.hoTen,
           student.chuyenNganh,
-          input.tenDeTai,
+          topic.topicId,
+          topic.title,
           input.ngayBaoVe,
           input.diaDiem,
           input.chuTichHoidong,

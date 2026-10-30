@@ -20,6 +20,7 @@ export interface DefenseQuery {
   selectedStatus?: string;
 }
 export interface StudentOption {
+  topicTitle?: string;
   assignmentId: string;
   programVersionTrackId: string;
   programCode: string;
