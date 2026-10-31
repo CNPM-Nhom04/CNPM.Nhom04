@@ -14,7 +14,7 @@ const routePermissions: Record<string, string> = {
   "/dashboard/bao-ve-luan-van": "DEFENSE_READ",
   "/dashboard/dang-ky-hoc-phan": "REGISTRATION_MANAGE",
   "/dashboard/sinh-vien/dang-ky": "COURSE_REGISTER",
-  "/dashboard/quan-ly-diem": "STUDENT_MANAGE",
+  "/dashboard/quan-ly-diem": "GRADE_READ",
   "/dashboard/xet-tot-nghiep": "STUDENT_MANAGE",
 };
 
