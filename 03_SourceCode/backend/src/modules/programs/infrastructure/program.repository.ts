@@ -443,7 +443,7 @@ export class MysqlProgramRepository extends ProgramRepository {
       return await this.db.transaction("READ COMMITTED", async (manager) => {
         await manager.query("SET time_zone='+00:00'");
         const [user] = await manager.query(
-          `SELECT u.id FROM users u WHERE u.id=? AND u.account_status='ACTIVE' AND u.deleted_at IS NULL
+          `SELECT u.id FROM users u WHERE u.id=? AND u.account_status='ACTIVE' AND u.deleted_at IS NULL AND u.must_change_password=0
           AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id
             JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=u.id AND r.status='ACTIVE' AND p.permission_code=?) FOR UPDATE`,
           [actor.id, permission],
@@ -540,9 +540,8 @@ export class MysqlProgramRepository extends ProgramRepository {
   }
   private async bump(manager: EntityManager, item: ProgramItem) {
     await manager.query(
-      `INSERT INTO program_ui_details (program_version_id,cohort_label,required_total_credits,revision)
-      VALUES (?,?,?,1) ON DUPLICATE KEY UPDATE revision=revision+1`,
-      [item.id, item.khoaTuyenSinh, item.tongTinChiYeuCau],
+      "UPDATE program_ui_details SET revision=revision+1 WHERE program_version_id=?",
+      [item.id],
     );
     await manager.query(
       "UPDATE program_versions SET updated_at=UTC_TIMESTAMP(6) WHERE id=?",
@@ -870,6 +869,50 @@ export class MysqlProgramRepository extends ProgramRepository {
       return item;
     });
   }
+  async startReview(
+    id: string,
+    requestId: string,
+    requestRevision: number,
+    actor: ProgramActor,
+  ) {
+    return this.write(actor, "PROGRAM_APPROVE", async (manager) => {
+      const item = await this.get(manager, id, actor, true);
+      const [request] = await manager.query(
+        "SELECT CAST(id AS CHAR) id,CAST(requested_by AS CHAR) requestedBy,revision,review_started_at FROM approval_requests WHERE id=? AND program_version_id=? AND current_status='PENDING' FOR UPDATE",
+        [requestId, id],
+      );
+      if (
+        !request ||
+        item.status !== "SUBMITTED" ||
+        request.review_started_at != null
+      )
+        throw new ConflictException(
+          "Hồ sơ không còn ở trạng thái chờ bắt đầu thẩm định.",
+        );
+      if (request.requestedBy === actor.id)
+        throw new ForbiddenException(
+          "Người gửi không được tự thẩm định hồ sơ.",
+        );
+      if (Number(request.revision) !== requestRevision)
+        throw new ConflictException("Hồ sơ đã thay đổi. Vui lòng tải lại.");
+      await manager.query(
+        "UPDATE program_versions SET status='REVIEWING' WHERE id=?",
+        [id],
+      );
+      await manager.query(
+        "UPDATE approval_requests SET review_started_at=UTC_TIMESTAMP(6),reviewing_by=?,revision=revision+1 WHERE id=?",
+        [actor.id, requestId],
+      );
+      await manager.query(
+        "INSERT INTO approval_actions(approval_request_id,actor_id,action_type,from_status,to_status) VALUES(?,?,'START_REVIEW','PENDING','PENDING')",
+        [requestId, actor.id],
+      );
+      await this.bump(manager, item);
+      const updated = await this.get(manager, id, actor);
+      await this.audit(manager, actor, "START_REVIEW", updated);
+      return updated;
+    });
+  }
   async review(
     id: string,
     input: ReviewInput,
@@ -884,12 +927,31 @@ export class MysqlProgramRepository extends ProgramRepository {
           "CTĐT không còn trong trạng thái chờ thẩm định.",
         );
       const [request] = await manager.query(
-        "SELECT CAST(id AS CHAR) AS id,CAST(requested_by AS CHAR) AS requestedBy FROM approval_requests WHERE program_version_id=? AND current_status='PENDING' FOR UPDATE",
+        "SELECT CAST(id AS CHAR) AS id,CAST(requested_by AS CHAR) AS requestedBy,revision,DATE_FORMAT(requested_at+INTERVAL 7 HOUR,'%Y-%m-%d') AS requestedDate FROM approval_requests WHERE program_version_id=? AND current_status='PENDING' FOR UPDATE",
         [id],
       );
       if (!request)
         throw new ConflictException(
           "Không tìm thấy yêu cầu xét duyệt đang chờ.",
+        );
+      if (
+        input.requestId != null &&
+        (input.requestId !== request.id ||
+          Number(request.revision) !== input.requestRevision)
+      )
+        throw new ConflictException(
+          "Lượt xét duyệt đã thay đổi. Vui lòng tải lại hồ sơ.",
+        );
+      if (
+        input.chuTichHoidong.trim().toLocaleLowerCase() ===
+        input.thuKhao.trim().toLocaleLowerCase()
+      )
+        throw new BadRequestException(
+          "Chủ tịch và thư ký phải là hai người khác nhau.",
+        );
+      if (input.ngayHop < request.requestedDate)
+        throw new BadRequestException(
+          "Ngày họp không được trước ngày gửi hồ sơ.",
         );
       if (request.requestedBy === actor.id)
         throw new ForbiddenException(
@@ -941,7 +1003,7 @@ export class MysqlProgramRepository extends ProgramRepository {
         ],
       );
       await manager.query(
-        "UPDATE approval_requests SET current_status=?,completed_at=UTC_TIMESTAMP(6),reviewing_by=?,latest_comment=? WHERE id=?",
+        "UPDATE approval_requests SET current_status=?,completed_at=UTC_TIMESTAMP(6),reviewing_by=COALESCE(reviewing_by,?),latest_comment=?,next_reminder_at=NULL,revision=revision+1 WHERE id=?",
         [
           approved ? "APPROVED" : "RETURNED",
           actor.id,
@@ -974,9 +1036,30 @@ export class MysqlProgramRepository extends ProgramRepository {
         );
       if (item.requestedBy === actor.id)
         throw new ForbiddenException("Người gửi không tự thẩm định hồ sơ.");
+      const [request] = await manager.query(
+        "SELECT CAST(id AS CHAR) id,CAST(requested_by AS CHAR) requestedBy FROM approval_requests WHERE program_version_id=? AND current_status='PENDING' FOR UPDATE",
+        [id],
+      );
+      if (
+        !request ||
+        (input.requestId != null && input.requestId !== request.id)
+      )
+        throw new ConflictException("Lượt duyệt không còn nhận tài liệu.");
+      if (request.requestedBy === actor.id)
+        throw new ForbiddenException(
+          "Người gửi không tự đính kèm tài liệu thẩm định.",
+        );
       await manager.query(
-        "INSERT INTO program_review_documents (program_version_id,storage_key,original_name,mime_type,file_size,uploaded_by) VALUES (?,?,?,?,?,?)",
-        [id, input.storageKey, input.name, input.mime, input.size, actor.id],
+        "INSERT INTO program_review_documents (program_version_id,storage_key,original_name,mime_type,file_size,uploaded_by,approval_request_id) VALUES (?,?,?,?,?,?,?)",
+        [
+          id,
+          input.storageKey,
+          input.name,
+          input.mime,
+          input.size,
+          actor.id,
+          request.id,
+        ],
       );
       const [{ id: documentId }] = await manager.query(
         "SELECT CAST(LAST_INSERT_ID() AS CHAR) AS id",

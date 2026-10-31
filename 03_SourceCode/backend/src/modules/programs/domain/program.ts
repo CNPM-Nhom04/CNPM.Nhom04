@@ -53,6 +53,8 @@ export interface CurriculumInput {
   }[];
 }
 export interface ReviewInput {
+  requestId?: string;
+  requestRevision?: number;
   hoiDongThamDinh: string;
   chuTichHoidong: string;
   thuKhao: string;
@@ -62,6 +64,7 @@ export interface ReviewInput {
   soBienBan: string;
 }
 export interface DocumentInput {
+  requestId?: string;
   storageKey: string;
   name: string;
   mime: string;
@@ -208,6 +211,12 @@ export abstract class ProgramRepository {
   abstract submit(
     id: string,
     revision: number,
+    actor: ProgramActor,
+  ): Promise<ProgramItem>;
+  abstract startReview(
+    id: string,
+    requestId: string,
+    requestRevision: number,
     actor: ProgramActor,
   ): Promise<ProgramItem>;
   abstract review(

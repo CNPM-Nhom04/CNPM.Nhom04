@@ -1,3 +1,4 @@
+import { Approvals1793448000000 } from "./migrations/1793448000000-Approvals";
 import "reflect-metadata";
 import "dotenv/config";
 import { DataSource } from "typeorm";
@@ -27,6 +28,7 @@ export default new DataSource({
     ThesisDefenses1793293200000,
     ThesisTopics1793340000000,
     Grades1793350800000,
+    Approvals1793448000000,
   ],
   migrationsTransactionMode: "none",
 });

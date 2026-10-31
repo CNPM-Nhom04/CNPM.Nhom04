@@ -7,6 +7,7 @@ import { ProgramController } from "./presentation/program.controller";
 import { ProgramGuard } from "./presentation/program.guard";
 @Module({
   imports: [IdentityModule],
+  exports: [ProgramRepository, ProgramService],
   controllers: [ProgramController],
   providers: [
     ProgramService,
