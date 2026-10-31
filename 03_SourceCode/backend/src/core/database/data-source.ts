@@ -1,3 +1,4 @@
+import { Graduation1793451600000 } from "./migrations/1793451600000-Graduation";
 import { Approvals1793448000000 } from "./migrations/1793448000000-Approvals";
 import "reflect-metadata";
 import "dotenv/config";
@@ -29,6 +30,7 @@ export default new DataSource({
     ThesisTopics1793340000000,
     Grades1793350800000,
     Approvals1793448000000,
+    Graduation1793451600000,
   ],
   migrationsTransactionMode: "none",
 });

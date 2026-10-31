@@ -1,3 +1,4 @@
+import { GraduationModule } from "./modules/graduation/graduation.module";
 import { ApprovalModule } from "./modules/approvals/approval.module";
 import { ComparisonModule } from "./modules/comparisons/comparison.module";
 import { Module } from "@nestjs/common";
@@ -40,6 +41,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     ThesisTopicModule,
     ComparisonModule,
     ApprovalModule,
+    GraduationModule,
   ],
   controllers: [],
   providers: [],

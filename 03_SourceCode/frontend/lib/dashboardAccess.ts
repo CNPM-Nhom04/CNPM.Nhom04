@@ -15,7 +15,7 @@ const routePermissions: Record<string, string> = {
   "/dashboard/dang-ky-hoc-phan": "REGISTRATION_MANAGE",
   "/dashboard/sinh-vien/dang-ky": "COURSE_REGISTER",
   "/dashboard/quan-ly-diem": "GRADE_READ",
-  "/dashboard/xet-tot-nghiep": "STUDENT_MANAGE",
+  "/dashboard/xet-tot-nghiep": "GRADUATION_READ",
 };
 
 // Menu visibility and direct navigation follow the same SQL-backed profile.
