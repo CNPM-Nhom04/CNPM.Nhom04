@@ -31,7 +31,9 @@
     "test:topic-browser": "node test/thesis-topic.browser.cjs",
     "test:grade-integration": "node test/grade.integration.cjs",
     "test:grade-parity": "node test/grade-data-parity.cjs",
-    "test:grade-browser": "node test/grade.browser.cjs"
+    "test:grade-browser": "node test/grade.browser.cjs",
+    "test:comparison-integration": "node test/comparison.integration.cjs",
+    "test:comparison-browser": "node test/comparison.browser.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
