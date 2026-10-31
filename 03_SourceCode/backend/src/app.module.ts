@@ -1,3 +1,4 @@
+import { ApprovalModule } from "./modules/approvals/approval.module";
 import { ComparisonModule } from "./modules/comparisons/comparison.module";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -38,6 +39,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     GradeModule,
     ThesisTopicModule,
     ComparisonModule,
+    ApprovalModule,
   ],
   controllers: [],
   providers: [],

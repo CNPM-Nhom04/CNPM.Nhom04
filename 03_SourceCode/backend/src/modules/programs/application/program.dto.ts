@@ -148,6 +148,15 @@ export class RevisionDto {
   @ApiProperty() @IsInt() @Min(0) revision: number;
 }
 export class ReviewDto extends RevisionDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Matches(/^[1-9]\d{0,19}$/)
+  requestId?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  requestRevision?: number;
   @ApiProperty()
   @IsString()
   @Transform(trim)

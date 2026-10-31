@@ -373,3 +373,13 @@ foreign course writes, search/actor spoofing, cross-unit review and Admin unit t
 The 57 workflow checks and 51 Admin checks also passed after these corrections.
 
 Final source verification: 59 API/browser checks passed for Admin, FIT officer/reviewer, FBE officer and thuan; 598 relational parity comparisons still passed. No test programs were added to the source database.
+
+
+## Bổ sung luồng xét duyệt theo từng lượt
+
+Giao diện xét duyệt chuyển sang /dashboard/xet-duyet và /dashboard/xet-duyet/:requestId.
+URL cũ /dashboard/chuong-trinh-dao-tao/:versionId/xet-duyet mở hàng đợi lọc phiên bản.
+Xem ../approvals/README.md để chạy migration Approvals1793448000000 và test lượt duyệt.
+Quyết định/API cũ vẫn dùng chung repository; bổ sung START_REVIEW, revision lượt và liên kết tài liệu vào request.
+Ngày họp không trước ngày gửi/không ở tương lai; chủ tịch và thư ký khác nhau.
+Tăng revision workflow không tự chèn thông tin UI mặc định vào phiên bản legacy.

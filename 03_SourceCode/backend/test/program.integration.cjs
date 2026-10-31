@@ -341,7 +341,7 @@ function input(item) {
       hoiDongThamDinh: "Hội đồng kiểm thử",
       chuTichHoidong: "Chủ tịch",
       thuKhao: "Thư ký",
-      ngayHop: "2026-01-02",
+      ngayHop: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10),
       ketLuan: "YEU_CAU_SUA_DOI",
       yKienDongGop: "Điều chỉnh thông tin",
       soBienBan: "TEST-" + marker,

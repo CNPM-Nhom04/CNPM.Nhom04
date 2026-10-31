@@ -87,8 +87,10 @@ export class ProgramService {
     id: string,
     file: ProgramUpload | undefined,
     actor: ProgramActor,
+    requestId?: string,
   ) {
     this.id(id);
+    if (requestId) this.id(requestId);
     if (!file || file.size === 0 || file.size > 25 * 1024 * 1024)
       throw new BadRequestException(
         "Tài liệu phải có nội dung và không vượt 25MB.",
@@ -123,6 +125,7 @@ export class ProgramService {
       return await this.repository.addDocument(
         id,
         {
+          requestId,
           storageKey,
           name,
           mime: pdf
