@@ -1,3 +1,4 @@
+import { ComparisonModule } from "./modules/comparisons/comparison.module";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -36,6 +37,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     CourseModule,
     GradeModule,
     ThesisTopicModule,
+    ComparisonModule,
   ],
   controllers: [],
   providers: [],

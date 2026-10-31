@@ -1,309 +1,659 @@
 "use client";
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GitCompare, FileSpreadsheet } from "lucide-react";
-import { Button } from "@/components/ui";
+import {
+  comparisonOptions,
+  comparePrograms,
+  exportComparison,
+  type ComparisonOption,
+  type ComparisonQuery,
+  type ComparisonResult,
+  type ComparisonCourse,
+  type Difference,
+} from "@/lib/services/comparisonService";
 
-type ProgramSummary = {
-  ma: string;
-  ten: string;
-  khoa: string;
-  khoaTuyenSinh: string;
-  tongTinChi: number;
-  chuanNgoaiNgu: string;
-  hinhThuc: string;
-  soHocPhan: number;
-  trangThai: string;
+const input =
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950";
+const button =
+  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-50";
+const statuses: Record<string, string> = {
+  SAME: "Giữ nguyên",
+  CHANGED: "Thay đổi",
+  ONLY_A: "Chỉ có ở A",
+  ONLY_B: "Chỉ có ở B",
 };
-
-export default function SoSanhCTDTPage() {
-  // Trạng thái chọn 2 chương trình để so sánh
-  const [ctdtA, setCtdtA] = useState("MS-KHMT-2026");
-  const [ctdtB, setCtdtB] = useState("MS-CNPM-2026");
-
-  // Dữ liệu mẫu mô phỏng thông tin 2 CTĐT được chọn
-  const dataMap: Record<string, ProgramSummary> = {
-    "MS-KHMT-2026": {
-      ma: "MS-KHMT-2026",
-      ten: "Thạc sĩ Khoa học Máy tính",
-      khoa: "Khoa Công nghệ Thông tin",
-      khoaTuyenSinh: "2026 - 2028",
-      tongTinChi: 60,
-      chuanNgoaiNgu: "VSTEP B2 / IELTS 6.0",
-      hinhThuc: "Chính quy",
-      soHocPhan: 18,
-      trangThai: "Bản nháp",
-    },
-    "MS-CNPM-2026": {
-      ma: "MS-CNPM-2026",
-      ten: "Thạc sĩ Kỹ thuật Phần mềm",
-      khoa: "Khoa Công nghệ Thông tin",
-      khoaTuyenSinh: "2026 - 2028",
-      tongTinChi: 60,
-      chuanNgoaiNgu: "VSTEP B2 / IELTS 6.0",
-      hinhThuc: "Chính quy",
-      soHocPhan: 20,
-      trangThai: "Chờ duyệt",
-    },
-    "PHD-KHMT-2025": {
-      ma: "PHD-KHMT-2025",
-      ten: "Tiến sĩ Khoa học Máy tính",
-      khoa: "Khoa Công nghệ Thông tin",
-      khoaTuyenSinh: "2025 - 2029",
-      tongTinChi: 90,
-      chuanNgoaiNgu: "IELTS 6.5 trở lên",
-      hinhThuc: "Chính quy tập trung",
-      soHocPhan: 25,
-      trangThai: "Đã ban hành",
-    },
-  };
-
-  const infoA = dataMap[ctdtA] || dataMap["MS-KHMT-2026"];
-  const infoB = dataMap[ctdtB] || dataMap["MS-CNPM-2026"];
-
-  // Dữ liệu chi tiết các học phần đối chiếu
-  const comparisonDetails = [
-    {
-      ma: "KTM701",
-      ten: "Học máy nâng cao",
-      tinChi: 3,
-      coA: "Có",
-      coB: "Có",
-      ghiChu: "Giữ nguyên khối lượng",
-    },
-    {
-      ma: "KTPM702",
-      ten: "Kiến trúc phần mềm hướng dịch vụ",
-      tinChi: 3,
-      coA: "Có",
-      coB: "Có",
-      ghiChu: "Cập nhật nội dung Microservices",
-    },
-    {
-      ma: "DL703",
-      ten: "Xử lý dữ liệu lớn (Big Data)",
-      tinChi: 4,
-      coA: "Không",
-      coB: "Có",
-      ghiChu: "Môn mới bổ sung ở CTĐT B",
-    },
-    {
-      ma: "AI704",
-      ten: "Đạo đức trí tuệ nhân tạo",
-      tinChi: 2,
-      coA: "Có",
-      coB: "Không",
-      ghiChu: "Lược bỏ ở CTĐT B",
-    },
-  ];
-
-  // Hàm xử lý xuất Excel (CSV định dạng chuẩn UTF-8 hỗ trợ tiếng Việt)
-  const handleExportExcel = () => {
-    const headers = [
-      "Mã HP",
-      "Tên Học Phần",
-      "Số TC",
-      `CTĐT A (${infoA.ma})`,
-      `CTĐT B (${infoB.ma})`,
-      "Ghi Chú Thay Đổi",
-    ];
-
-    const rows = comparisonDetails.map((item) => [
-      item.ma,
-      item.ten,
-      item.tinChi,
-      item.coA,
-      item.coB,
-      item.ghiChu,
-    ]);
-
-    // Thêm BOM (\uFEFF) để Excel hiển thị đúng tiếng Việt không bị lỗi font
-    const csvContent =
-      "\uFEFF" +
-      [
-        headers.join(","),
-        ...rows.map((e) => e.map((val) => `"${val}"`).join(",")),
-      ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `Bao_Cao_So_Sanh_${infoA.ma}_vs_${infoB.ma}.csv`,
+const programStatus: Record<string, string> = {
+  DRAFT: "Bản nháp",
+  SUBMITTED: "Chờ duyệt",
+  REVIEWING: "Thẩm định",
+  RETURNED: "Yêu cầu sửa",
+  PUBLISHED: "Đã ban hành",
+  ARCHIVED: "Lưu trữ",
+  RETIRED: "Ngừng sử dụng",
+};
+const fields: Record<string, string> = {
+  courseId: "Định danh học phần",
+  code: "Mã",
+  courseVersionId: "Phiên bản học phần",
+  versionNumber: "Số phiên bản",
+  name: "Tên",
+  englishName: "Tên tiếng Anh",
+  credits: "Tín chỉ",
+  theoryHours: "Giờ lý thuyết",
+  practiceHours: "Giờ thực hành",
+  description: "Mô tả",
+  groupCode: "Nhóm kiến thức",
+  requirementType: "Bắt buộc/tự chọn",
+  semester: "Học kỳ",
+  notes: "Ghi chú",
+  prerequisites: "Tiên quyết",
+  ploMappings: "Ánh xạ PLO",
+  parentCode: "Nhóm cha",
+  minimumCredits: "TC tối thiểu",
+  maximumCredits: "TC tối đa",
+  status: "Trạng thái",
+};
+function display(value: unknown): string {
+  if (value == null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+function overviewValue(key: string, value: unknown) {
+  const text = display(value);
+  if (key === "status") return programStatus[text] || text;
+  if (key === "trackStatus")
+    return (
+      (
+        { ACTIVE: "Hoạt động", INACTIVE: "Ngừng hoạt động" } as Record<
+          string,
+          string
+        >
+      )[text] || text
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  if (key === "studyForm")
+    return (
+      (
+        {
+          CHINH_QUY: "Chính quy",
+          VUA_LAM_VUA_HOC: "Vừa làm vừa học",
+        } as Record<string, string>
+      )[text] || text
+    );
+  return text;
+}
+interface Selection {
+  version: ComparisonOption | null;
+  track: string;
+}
+function Selector({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Selection;
+  onChange: (value: Selection) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<ComparisonOption[]>([]);
+  const [pages, setPages] = useState(0);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setLoading(true);
+      setError("");
+      comparisonOptions(search, page, controller.signal)
+        .then((result) => {
+          setData(result.data);
+          setPages(result.meta.totalPages);
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) {
+            setError(e.message);
+            setData([]);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search, page, retry]);
+  const options =
+    value.version && !data.some((x) => x.versionId === value.version!.versionId)
+      ? [value.version, ...data]
+      : data;
   return (
-    <div className="space-y-6 pb-16">
-      {/* 1. Header tiêu đề */}
-      <div className="bg-white px-6 py-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="font-bold">{label}</h2>
+      <input
+        aria-label={"Tìm phiên bản " + label}
+        className={input}
+        placeholder="Tìm mã CTĐT, tên hoặc phiên bản..."
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setPage(1);
+        }}
+      />
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}{" "}
+          <button className={button} onClick={() => setRetry((x) => x + 1)}>
+            Thử lại
+          </button>
+        </p>
+      )}
+      <select
+        aria-label={"Phiên bản " + label}
+        className={input}
+        value={value.version?.versionId || ""}
+        onChange={(e) =>
+          onChange({
+            version:
+              options.find((x) => x.versionId === e.target.value) || null,
+            track: "",
+          })
+        }
+      >
+        <option value="">Chọn phiên bản từ CSDL</option>
+        {options.map((x) => (
+          <option key={x.versionId} value={x.versionId}>
+            {x.programCode} / {x.versionCode} — {x.programName} (
+            {programStatus[x.status] || x.status}) — {x.unitName}
+          </option>
+        ))}
+      </select>
+      <div className="flex items-center gap-3 text-sm">
+        <button
+          className={button}
+          disabled={loading || page <= 1}
+          onClick={() => setPage((x) => x - 1)}
+        >
+          Trước
+        </button>
+        <span>
+          {loading
+            ? "Đang tải..."
+            : pages === 0
+              ? "Không có phiên bản phù hợp"
+              : `Trang ${page}/${pages}`}
+        </span>
+        <button
+          className={button}
+          disabled={loading || page >= pages}
+          onClick={() => setPage((x) => x + 1)}
+        >
+          Sau
+        </button>
+      </div>
+      <select
+        aria-label={"Hướng " + label}
+        className={input}
+        disabled={!value.version}
+        value={value.track}
+        onChange={(e) => onChange({ ...value, track: e.target.value })}
+      >
+        <option value="">Chọn hướng đào tạo</option>
+        {value.version?.tracks.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.code} — {t.name} (
+            {t.status === "ACTIVE" ? "Hoạt động" : "Ngừng hoạt động"})
+          </option>
+        ))}
+      </select>
+      {value.version && value.version.tracks.length === 0 && (
+        <p>Phiên bản này chưa có hướng đào tạo để so sánh.</p>
+      )}
+    </section>
+  );
+}
+function courseField(key: string, value: unknown): string {
+  if (key === "requirementType")
+    return value === "REQUIRED" ? "Bắt buộc" : "Tự chọn";
+  if (key === "prerequisites") {
+    const rows = value as ComparisonCourse["prerequisites"];
+    return rows.length
+      ? rows
+          .map(
+            (x) =>
+              x.code +
+              (x.minimumGrade == null
+                ? ""
+                : " (điểm tối thiểu: " + x.minimumGrade + ")"),
+          )
+          .join("; ")
+      : "Không có";
+  }
+  if (key === "ploMappings") {
+    const rows = value as ComparisonCourse["ploMappings"];
+    const levels: Record<string, string> = {
+      INTRODUCE: "Giới thiệu",
+      REINFORCE: "Củng cố",
+      MASTER: "Thành thạo",
+    };
+    return rows.length
+      ? rows
+          .map(
+            (x) =>
+              x.code +
+              ": " +
+              x.description +
+              " — " +
+              (x.contributionLevel
+                ? levels[x.contributionLevel] || x.contributionLevel
+                : "Chưa có mức đóng góp") +
+              (x.status === "INACTIVE" ? " (ngừng hoạt động)" : ""),
+          )
+          .join("\n")
+      : "Chưa có ánh xạ";
+  }
+  return display(value);
+}
+function CourseValue({ course }: { course: ComparisonCourse | null }) {
+  if (!course) return <span>—</span>;
+  return (
+    <div className="space-y-1">
+      <p className="font-semibold">{course.name}</p>
+      <p>
+        Phiên bản {course.versionNumber} · {course.credits} TC ·{" "}
+        {course.requirementType === "REQUIRED" ? "Bắt buộc" : "Tự chọn"}
+      </p>
+      <p>
+        Nhóm: {course.groupCode} · Học kỳ: {display(course.semester)}
+      </p>
+      <details>
+        <summary className="cursor-pointer text-blue-700">
+          Xem đầy đủ dữ liệu
+        </summary>
+        <dl className="mt-2 space-y-2">
+          {Object.entries(course)
+            .filter(([key]) => !["courseId", "courseVersionId"].includes(key))
+            .map(([key, value]) => (
+              <div key={key}>
+                <dt className="font-semibold">{fields[key] || key}</dt>
+                <dd className="whitespace-pre-wrap break-words">
+                  {courseField(key, value)}
+                </dd>
+              </div>
+            ))}
+        </dl>
+      </details>
+    </div>
+  );
+}
+function JsonRows<T extends object>({ rows }: { rows: Difference<T>[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Kết quả</th>
+            <th>A</th>
+            <th>B</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-slate-200 align-top">
+              <td className="p-3">{row.key}</td>
+              <td className="p-3">
+                {statuses[row.status]}
+                <p>{row.changedFields.map((x) => fields[x] || x).join(", ")}</p>
+              </td>
+              {[row.a, row.b].map((value, i) => (
+                <td key={i} className="p-3">
+                  {value ? (
+                    <dl>
+                      {Object.entries(value).map(([key, v]) => (
+                        <div className="mb-1" key={key}>
+                          <strong>{fields[key] || key}: </strong>
+                          {display(v)}
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={4} className="p-4">
+                Chưa có dữ liệu.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+export default function SoSanhCTDTPage() {
+  const [a, setA] = useState<Selection>({ version: null, track: "" }),
+    [b, setB] = useState<Selection>({ version: null, track: "" });
+  const [result, setResult] = useState<ComparisonResult | null>(null),
+    [error, setError] = useState("");
+  const [loading, setLoading] = useState(false),
+    [exporting, setExporting] = useState(false),
+    [retry, setRetry] = useState(0);
+  const [filter, setFilter] = useState("ALL"),
+    [search, setSearch] = useState("");
+  const va = a.version?.versionId || "",
+    vb = b.version?.versionId || "",
+    ta = a.track,
+    tb = b.track;
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!va || !vb || !ta || !tb) {
+      return;
+    }
+    comparePrograms(
+      { versionA: va, trackA: ta, versionB: vb, trackB: tb },
+      controller.signal,
+    )
+      .then((value) => {
+        if (!controller.signal.aborted) setResult(value);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [va, vb, ta, tb, retry]);
+  function changeSelection(side: "A" | "B", value: Selection) {
+    const other = side === "A" ? b : a;
+    if (side === "A") setA(value);
+    else setB(value);
+    setResult(null);
+    setError("");
+    setLoading(
+      Boolean(value.version && value.track && other.version && other.track),
+    );
+  }
+  function reload() {
+    setResult(null);
+    setError("");
+    setLoading(Boolean(va && vb && ta && tb));
+    setRetry((x) => x + 1);
+  }
+  const ready =
+    result &&
+    result.a.versionId === va &&
+    result.a.trackId === ta &&
+    result.b.versionId === vb &&
+    result.b.trackId === tb;
+  async function download() {
+    if (!ready) return;
+    setExporting(true);
+    setError("");
+    const query: ComparisonQuery = {
+      versionA: va,
+      trackA: ta,
+      versionB: vb,
+      trackB: tb,
+    };
+    try {
+      await exportComparison(query);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Xuất báo cáo thất bại.");
+    } finally {
+      setExporting(false);
+    }
+  }
+  const rows = ready
+    ? result.courses.filter(
+        (row) =>
+          (filter === "ALL" || row.status === filter) &&
+          [row.a?.code, row.a?.name, row.b?.code, row.b?.name].some((x) =>
+            x?.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+          ),
+      )
+    : [];
+  const overview: [string, string][] = [
+    ["programCode", "Mã CTĐT"],
+    ["programName", "Tên CTĐT"],
+    ["versionCode", "Phiên bản"],
+    ["status", "Trạng thái phiên bản"],
+    ["unitName", "Đơn vị quản lý"],
+    ["levelName", "Bậc đào tạo"],
+    ["majorName", "Ngành"],
+    ["cohortYear", "Năm tuyển sinh"],
+    ["cohortLabel", "Khóa áp dụng"],
+    ["trackName", "Hướng đào tạo"],
+    ["trackStatus", "Trạng thái hướng"],
+    ["requiredCredits", "Định mức TC của hướng"],
+    ["versionRequiredCredits", "Định mức TC chung (nếu được nhập)"],
+    ["studyForm", "Hình thức"],
+    ["duration", "Thời gian đào tạo"],
+    ["languageRequirement", "Chuẩn ngoại ngữ"],
+    ["itRequirement", "Chuẩn tin học"],
+    ["effectiveFrom", "Hiệu lực từ"],
+    ["effectiveTo", "Hiệu lực đến"],
+  ];
+  return (
+    <div className="space-y-6 pb-16 text-slate-950">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-950 flex items-center gap-2">
-            <GitCompare className="h-6 w-6 text-blue-600" />
+          <h1 className="flex items-center gap-2 text-xl font-bold">
+            <GitCompare className="text-blue-600" />
             So Sánh Cấu Trúc Chương Trình Đào Tạo
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Đối chiếu song song giữa 2 phiên bản hoặc 2 định hướng chuyên ngành
-            khác nhau
+          <p className="mt-2 text-sm text-slate-600">
+            Chọn đúng phiên bản và hướng. Dữ liệu được đọc từ CSDL trong phạm vi
+            được phân quyền.
           </p>
         </div>
-        <Button
-          onClick={handleExportExcel}
-          variant="outline"
-          className="border-slate-300 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer"
+        <button
+          className={button}
+          disabled={!ready || loading || exporting}
+          onClick={download}
         >
-          <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
-          Xuất Báo Cáo So Sánh (Excel)
-        </Button>
+          <FileSpreadsheet className="mr-2 inline h-4 w-4" />
+          {exporting ? "Đang xuất..." : "Xuất Excel (.xlsx)"}
+        </button>
       </div>
-
-      {/* 2. Bộ chọn 2 CTĐT để so sánh */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-        {/* Lựa chọn A */}
-        <div className="space-y-2 p-4 rounded-lg bg-blue-50/50 border border-blue-100">
-          <label className="text-xs font-bold text-blue-900 uppercase tracking-wider block">
-            Chương Trình Gốc (Bản A)
-          </label>
-          <select
-            value={ctdtA}
-            onChange={(e) => setCtdtA(e.target.value)}
-            className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="MS-KHMT-2026">
-              MS-KHMT-2026: Thạc sĩ Khoa học Máy tính
-            </option>
-            <option value="MS-CNPM-2026">
-              MS-CNPM-2026: Thạc sĩ Kỹ thuật Phần mềm
-            </option>
-            <option value="PHD-KHMT-2025">
-              PHD-KHMT-2025: Tiến sĩ Khoa học Máy tính
-            </option>
-          </select>
-        </div>
-
-        {/* Lựa chọn B */}
-        <div className="space-y-2 p-4 rounded-lg bg-emerald-50/50 border border-emerald-100">
-          <label className="text-xs font-bold text-emerald-900 uppercase tracking-wider block">
-            Chương Trình Đối Chéo (Bản B)
-          </label>
-          <select
-            value={ctdtB}
-            onChange={(e) => setCtdtB(e.target.value)}
-            className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="MS-KHMT-2026">
-              MS-KHMT-2026: Thạc sĩ Khoa học Máy tính
-            </option>
-            <option value="MS-CNPM-2026">
-              MS-CNPM-2026: Thạc sĩ Kỹ thuật Phần mềm
-            </option>
-            <option value="PHD-KHMT-2025">
-              PHD-KHMT-2025: Tiến sĩ Khoa học Máy tính
-            </option>
-          </select>
-        </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Selector
+          label="Bản A"
+          value={a}
+          onChange={(value) => changeSelection("A", value)}
+        />
+        <Selector
+          label="Bản B"
+          value={b}
+          onChange={(value) => changeSelection("B", value)}
+        />
       </div>
-
-      {/* 3. Bảng đối chiếu thông số tổng quan */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-6 py-4 bg-slate-50/90 border-b border-slate-200">
-          <h2 className="font-bold text-slate-800 text-sm">
-            Bảng Đối Chiếu Thông Số Tổng Quan
-          </h2>
+      {error && (
+        <div role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
+          {error}{" "}
+          <button className={button} onClick={reload}>
+            Thử lại
+          </button>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm table-fixed">
-            <thead>
-              <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
-                <th className="w-64 px-6 py-3">Tiêu Chí So Sánh</th>
-                <th className="px-6 py-3 text-blue-700 bg-blue-50/40">
-                  {infoA.ten} ({infoA.ma})
-                </th>
-                <th className="px-6 py-3 text-emerald-700 bg-emerald-50/40">
-                  {infoB.ten} ({infoB.ma})
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Đơn vị quản lý
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-blue-50/20">
-                  {infoA.khoa}
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-emerald-50/20">
-                  {infoB.khoa}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Khóa tuyển sinh áp dụng
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-blue-50/20">
-                  {infoA.khoaTuyenSinh}
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-emerald-50/20">
-                  {infoB.khoaTuyenSinh}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Tổng định mức tín chỉ
-                </td>
-                <td className="px-6 py-3.5 font-bold text-blue-600 bg-blue-50/20">
-                  {infoA.tongTinChi} TC
-                </td>
-                <td
-                  className={`px-6 py-3.5 font-bold bg-emerald-50/20 ${infoA.tongTinChi !== infoB.tongTinChi ? "text-amber-600" : "text-emerald-600"}`}
-                >
-                  {infoB.tongTinChi} TC{" "}
-                  {infoA.tongTinChi !== infoB.tongTinChi && "(Khác biệt)"}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Chuẩn đầu ra ngoại ngữ
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-blue-50/20">
-                  {infoA.chuanNgoaiNgu}
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-emerald-50/20">
-                  {infoB.chuanNgoaiNgu}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Hình thức đào tạo
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-blue-50/20">
-                  {infoA.hinhThuc}
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-emerald-50/20">
-                  {infoB.hinhThuc}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-6 py-3.5 text-slate-500 font-normal">
-                  Tổng số học phần trong cấu trúc
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-blue-50/20">
-                  {infoA.soHocPhan} học phần
-                </td>
-                <td className="px-6 py-3.5 text-slate-900 bg-emerald-50/20">
-                  {infoB.soHocPhan} học phần
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
+      {loading && <p role="status">Đang đối chiếu dữ liệu...</p>}
+      {!loading && !ready && !error && (
+        <p>
+          Chọn đủ hai phiên bản và hai hướng để xem kết quả. CTĐT chưa có phiên
+          bản chưa thể so sánh cấu trúc.
+        </p>
+      )}
+      {ready && (
+        <>
+          {va === vb && ta === tb && (
+            <p className="rounded-xl bg-blue-50 p-4">
+              Bạn đang đối chiếu cùng một phiên bản và hướng; các học phần sẽ
+              giữ nguyên.
+            </p>
+          )}
+          {result.a.levelName !== result.b.levelName && (
+            <p className="rounded-xl bg-amber-50 p-4">
+              Hai CTĐT khác bậc đào tạo. Kết quả là đối chiếu cấu trúc, không
+              xác nhận tương đương hay chuyển đổi tín chỉ.
+            </p>
+          )}
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <h2 className="p-4 font-bold">Thông số tổng quan</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="p-3">Tiêu chí</th>
+                    <th className="p-3">A</th>
+                    <th className="p-3">B</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.map(([key, label]) => {
+                    const av = result.a[key as keyof typeof result.a],
+                      bv = result.b[key as keyof typeof result.b];
+                    return (
+                      <tr
+                        key={key}
+                        className={
+                          display(av) !== display(bv)
+                            ? "border-t border-slate-200 bg-amber-50"
+                            : "border-t border-slate-100"
+                        }
+                      >
+                        <td className="p-3">{label}</td>
+                        <td className="p-3">{overviewValue(key, av)}</td>
+                        <td className="p-3">{overviewValue(key, bv)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t border-slate-200">
+                    <td className="p-3">Số học phần trong hướng</td>
+                    <td className="p-3">{result.a.courses.length}</td>
+                    <td className="p-3">{result.b.courses.length}</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="p-3">
+                      Tổng TC danh sách (gồm toàn bộ tự chọn)
+                    </td>
+                    <td className="p-3">{result.summary.listedCreditsA}</td>
+                    <td className="p-3">{result.summary.listedCreditsB}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="p-4 text-sm text-slate-600">
+              Tổng TC danh sách không phải định mức phải tích lũy. “—” là chưa
+              có dữ liệu; không tự suy ra chuẩn ngoại ngữ hay hình thức đào tạo.
+            </p>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="font-bold">Đối chiếu học phần</h2>
+            <p className="my-3 text-sm">
+              Giữ nguyên: {result.summary.same} · Thay đổi:{" "}
+              {result.summary.changed} · Chỉ A: {result.summary.onlyA} · Chỉ B:{" "}
+              {result.summary.onlyB}
+            </p>
+            <div className="mb-4 flex flex-wrap gap-3">
+              <input
+                aria-label="Tìm học phần so sánh"
+                className={input + " max-w-sm"}
+                placeholder="Tìm mã hoặc tên học phần..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select
+                aria-label="Lọc thay đổi"
+                className={input + " max-w-xs"}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="ALL">Tất cả kết quả</option>
+                {Object.entries(statuses).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] text-left text-sm">
+                <thead className="bg-slate-100">
+                  <tr>
+                    {["Mã HP", "A", "B", "Thay đổi"].map((x) => (
+                      <th key={x} className="p-3">
+                        {x}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.key}
+                      className="border-t border-slate-200 align-top"
+                    >
+                      <td className="p-3 font-semibold">
+                        {row.a?.code || row.b?.code}
+                      </td>
+                      <td className="w-1/3 p-3">
+                        <CourseValue course={row.a} />
+                      </td>
+                      <td className="w-1/3 p-3">
+                        <CourseValue course={row.b} />
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={
+                            row.status === "SAME"
+                              ? "text-slate-700"
+                              : "font-semibold text-amber-800"
+                          }
+                        >
+                          {statuses[row.status]}
+                        </span>
+                        <p className="mt-2">
+                          {row.changedFields
+                            .map((x) => fields[x] || x)
+                            .join(", ")}
+                        </p>
+                      </td>
+                    </tr>
+                  ))}
+                  {!rows.length && (
+                    <tr>
+                      <td colSpan={4} className="p-4">
+                        Không có học phần phù hợp.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="mb-4 font-bold">
+              Nhóm kiến thức (đối chiếu theo mã nhóm)
+            </h2>
+            <JsonRows rows={result.groups} />
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="mb-4 font-bold">
+              Chuẩn đầu ra của phiên bản (đối chiếu theo mã PLO)
+            </h2>
+            <JsonRows rows={result.outcomes} />
+          </section>
+        </>
+      )}
     </div>
   );
 }
