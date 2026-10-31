@@ -36,7 +36,10 @@
     "test:comparison-browser": "node test/comparison.browser.cjs",
     "test:approval-parity": "node test/approval-data-parity.cjs",
     "test:approval-integration": "node test/approval.integration.cjs",
-    "test:approval-browser": "node test/approval.browser.cjs"
+    "test:approval-browser": "node test/approval.browser.cjs",
+    "test:graduation-parity": "node test/graduation-data-parity.cjs",
+    "test:graduation-integration": "node test/graduation.integration.cjs",
+    "test:graduation-browser": "node test/graduation.browser.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
