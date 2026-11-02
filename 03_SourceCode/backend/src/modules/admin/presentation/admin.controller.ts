@@ -1,5 +1,20 @@
+import { FacultyService } from "../application/faculty.service";
+import {
+  FacultyInputDto,
+  FacultyQueryDto,
+  FacultyVersionDto,
+  UpdateFacultyDto,
+} from "../application/faculty.dto";
+import { FileInterceptor } from "@nestjs/platform-express";
+import {
+  MajorImportService,
+  MajorUpload,
+} from "../application/major-import.service";
+import { MAJOR_UPLOAD_BYTES } from "../application/major-import.parser";
 import {
   Body,
+  UploadedFile,
+  UseInterceptors,
   Controller,
   Delete,
   Get,
@@ -15,6 +30,8 @@ import {
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
   ApiOperation,
   ApiProduces,
   ApiResponse,
@@ -32,6 +49,13 @@ import {
   UserInputDto,
   UsersQueryDto,
 } from "../application/admin.dto";
+import {
+  MajorInputDto,
+  CommitMajorImportDto,
+  MajorVersionDto,
+  MajorsQueryDto,
+  UpdateMajorDto,
+} from "../application/major.dto";
 import { AdminGuard, AdminRequest } from "./admin.guard";
 
 @ApiTags("Admin - Quản trị")
@@ -60,7 +84,11 @@ import { AdminGuard, AdminRequest } from "./admin.guard";
 )
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly service: AdminService) {}
+  constructor(
+    private readonly service: AdminService,
+    private readonly majorImport: MajorImportService,
+    private readonly faculties: FacultyService,
+  ) {}
   private actor(request: AdminRequest): Actor {
     return {
       id: request.user.userId,
@@ -105,6 +133,148 @@ export class AdminController {
   @ApiOperation({ summary: "Xóa mềm tài khoản, giữ lịch sử tham chiếu" })
   deleteUser(@Param("id") id: string, @Req() request: AdminRequest) {
     return this.service.deleteUser(id, this.actor(request));
+  }
+
+  @Get("khoa")
+  @ApiOperation({ summary: "Danh sách khoa (FACULTY) từ organizational_units" })
+  listFaculties(@Query() query: FacultyQueryDto) {
+    return this.faculties.list(query);
+  }
+  @Post("khoa")
+  createFaculty(@Body() body: FacultyInputDto, @Req() req: AdminRequest) {
+    return this.faculties.save(null, body, this.actor(req));
+  }
+  @Put("khoa/:id")
+  updateFaculty(
+    @Param("id") id: string,
+    @Body() body: UpdateFacultyDto,
+    @Req() req: AdminRequest,
+  ) {
+    return this.faculties.save(
+      id,
+      body,
+      this.actor(req),
+      body.expectedUpdatedAt,
+    );
+  }
+  @Delete("khoa/:id")
+  deleteFaculty(
+    @Param("id") id: string,
+    @Query() query: FacultyVersionDto,
+    @Req() req: AdminRequest,
+  ) {
+    return this.faculties.remove(id, query.expectedUpdatedAt, this.actor(req));
+  }
+
+  @Get("nganh-dao-tao")
+  @ApiOperation({
+    summary: "Ngành đào tạo từ SQL, tìm/lọc khoa/trạng thái và phân trang",
+  })
+  listMajors(@Query() query: MajorsQueryDto) {
+    return this.service.listMajors(query);
+  }
+
+  @Get("nganh-dao-tao/options")
+  @ApiOperation({ summary: "Đơn vị đang hoạt động từ SQL để quản lý ngành" })
+  majorOptions() {
+    return this.service.majorOptions();
+  }
+
+  @Get("nganh-dao-tao/import/options")
+  majorImportOptions() {
+    return this.majorImport.limits();
+  }
+
+  @Get("nganh-dao-tao/import/mau-excel")
+  async majorImportTemplate() {
+    return new StreamableFile(await this.majorImport.template(), {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: 'attachment; filename="Mau_Nganh_Dao_Tao.xlsx"',
+    });
+  }
+
+  @Post("nganh-dao-tao/import/kiem-tra")
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: { file: { type: "string", format: "binary" } },
+      required: ["file"],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: MAJOR_UPLOAD_BYTES, files: 1, fields: 0, parts: 2 },
+    }),
+  )
+  previewMajorImport(@UploadedFile() file: MajorUpload) {
+    return this.majorImport.preview(file);
+  }
+
+  @Post("nganh-dao-tao/import/luu")
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        file: { type: "string", format: "binary" },
+        previewHash: { type: "string" },
+      },
+      required: ["file", "previewHash"],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: {
+        fileSize: MAJOR_UPLOAD_BYTES,
+        files: 1,
+        fields: 1,
+        parts: 3,
+        fieldSize: 128,
+      },
+    }),
+  )
+  commitMajorImport(
+    @UploadedFile() file: MajorUpload,
+    @Body() body: CommitMajorImportDto,
+    @Req() request: AdminRequest,
+  ) {
+    return this.majorImport.commit(file, body.previewHash, this.actor(request));
+  }
+
+  @Get("nganh-dao-tao/:id")
+  majorDetail(@Param("id") id: string) {
+    return this.service.majorDetail(id);
+  }
+
+  @Post("nganh-dao-tao")
+  createMajor(@Body() body: MajorInputDto, @Req() request: AdminRequest) {
+    return this.service.createMajor(body, this.actor(request));
+  }
+
+  @Put("nganh-dao-tao/:id")
+  updateMajor(
+    @Param("id") id: string,
+    @Body() body: UpdateMajorDto,
+    @Req() request: AdminRequest,
+  ) {
+    return this.service.updateMajor(id, body, this.actor(request));
+  }
+
+  @Delete("nganh-dao-tao/:id")
+  @ApiOperation({
+    summary: "Xóa ngành chưa có liên kết; chặn ghi đè dữ liệu cũ",
+  })
+  deleteMajor(
+    @Param("id") id: string,
+    @Query() query: MajorVersionDto,
+    @Req() request: AdminRequest,
+  ) {
+    return this.service.deleteMajor(
+      id,
+      query.expectedUpdatedAt,
+      this.actor(request),
+    );
   }
 
   @Get("master-data")
@@ -173,4 +343,3 @@ export class AdminController {
     });
   }
 }
- 

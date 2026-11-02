@@ -1,3 +1,8 @@
+import {
+  canUseDashboard,
+  canReadOwnProgram,
+  OWN_PROGRAM_PATH,
+} from "@/lib/accountAccess";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
@@ -20,6 +25,8 @@ export default async function DashboardLayout({
       </main>
     );
   if (user.mustChangePassword) redirect("/doi-mat-khau");
+  if (!canUseDashboard(user))
+    redirect(canReadOwnProgram(user) ? OWN_PROGRAM_PATH : "/");
   return (
     <SessionProvider user={user}>
       <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -32,4 +39,3 @@ export default async function DashboardLayout({
     </SessionProvider>
   );
 }
- 

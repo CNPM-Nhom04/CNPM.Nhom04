@@ -383,3 +383,4 @@ Xem ../approvals/README.md để chạy migration Approvals1793448000000 và tes
 Quyết định/API cũ vẫn dùng chung repository; bổ sung START_REVIEW, revision lượt và liên kết tài liệu vào request.
 Ngày họp không trước ngày gửi/không ở tương lai; chủ tịch và thư ký khác nhau.
 Tăng revision workflow không tự chèn thông tin UI mặc định vào phiên bản legacy.
+Xuất Excel khung CTĐT theo đúng phiên bản/hướng: [hướng dẫn](../admin/FACULTIES_README.md#xuất-excel-khung-ctđt-chi-tiết).

@@ -29,3 +29,8 @@
 ## 3. Liên kết hệ thống
 * 🌐 **Mã nguồn (Source Code):** [CNPM-Nhom04/CNPM.Nhom04](https://github.com/CNPM-Nhom04/CNPM.Nhom04)
 
+## 4. Clone và chạy test trên máy khác
+
+Xem [hướng dẫn cài đặt và bàn giao dữ liệu](docs/LOCAL_TEST_SETUP.md) để chuẩn bị MariaDB, phục hồi database, cấu hình env, cài thư viện và chạy NestJS/Next.js. Chỉ clone Git không chuyển dữ liệu vừa test hoặc file upload.
+
+Nếu backend chạy trong Ubuntu/WSL, dùng [quy trình WSL từ cài đặt đến chạy test](docs/WSL_TEST_SETUP.md). Hướng dẫn tạo database và user ứng dụng riêng để tránh lỗi root/Unknown database.

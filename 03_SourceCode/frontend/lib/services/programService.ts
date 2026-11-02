@@ -9,6 +9,7 @@ export type ProgramStatus =
 export interface ProgramPermissions {
   canCreateProgram: boolean;
   canEdit: boolean;
+  canExport?: boolean;
   canSubmit: boolean;
   canApprove: boolean;
 }

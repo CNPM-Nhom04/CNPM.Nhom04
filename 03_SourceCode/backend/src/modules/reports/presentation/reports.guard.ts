@@ -3,11 +3,17 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  SetMetadata,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { DataSource } from "typeorm";
+export const ReportExportPermission = () => SetMetadata("reportExport", true);
 @Injectable()
 export class ReportsGuard implements CanActivate {
-  constructor(private readonly db: DataSource) {}
+  constructor(
+    private readonly db: DataSource,
+    private readonly reflector: Reflector = new Reflector(),
+  ) {}
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
     const [permission] = await this.db.query(
@@ -18,7 +24,16 @@ export class ReportsGuard implements CanActivate {
       throw new ForbiddenException(
         "Bạn chưa được cấp quyền xem báo cáo chương trình đào tạo.",
       );
+    if (this.reflector.get<boolean>("reportExport", context.getHandler())) {
+      const [exportPermission] = await this.db.query(
+        "SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND r.status='ACTIVE' AND p.permission_code='PROGRAM_EXPORT' LIMIT 1",
+        [request.user.userId],
+      );
+      if (!exportPermission)
+        throw new ForbiddenException(
+          "Bạn chưa được cấp quyền PROGRAM_EXPORT để xuất báo cáo.",
+        );
+    }
     return true;
   }
 }
- 

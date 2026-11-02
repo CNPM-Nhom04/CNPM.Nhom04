@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl } from "@/lib/server/backend";
 const patterns: Record<string, RegExp> = {
-  GET: /^(?:|options|hoc-phan|chua-co-phien-ban|danh-muc\/[1-9]\d{0,19}|[1-9]\d{0,19}(?:\/kiem-tra|\/tai-lieu\/[1-9]\d{0,19})?)$/,
+  GET: /^(?:|options|hoc-phan|chua-co-phien-ban|danh-muc\/[1-9]\d{0,19}|[1-9]\d{0,19}(?:\/xuat-excel|\/kiem-tra|\/tai-lieu\/[1-9]\d{0,19})?)$/,
   POST: /^(?:|danh-muc\/[1-9]\d{0,19}\/phien-ban|[1-9]\d{0,19}\/(?:gui-duyet|xet-duyet|tai-lieu))$/,
   PUT: /^[1-9]\d{0,19}(?:\/cau-truc)?$/,
 };

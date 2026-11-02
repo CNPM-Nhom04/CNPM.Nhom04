@@ -1,3 +1,5 @@
+import { ProgramExportService } from "../application/program-export.service";
+import { XLSX_MIME } from "../../../core/excel/workbook";
 import {
   Body,
   Controller,
@@ -17,6 +19,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
   ApiBearerAuth,
+  ApiProduces,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -27,6 +30,7 @@ import { JwtAuthGuard } from "../../identity/presentation/jwt-auth.guard";
 import { ProgramService, ProgramUpload } from "../application/program.service";
 import {
   CurriculumDto,
+  ProgramExportQueryDto,
   ProgramInputDto,
   ProgramQueryDto,
   ReviewDto,
@@ -41,6 +45,9 @@ import {
 function permissions(actor: ProgramActor, item?: ProgramItem) {
   return {
     canEdit: actor.permissions.includes("PROGRAM_EDIT"),
+    canExport:
+      actor.permissions.includes("PROGRAM_EXPORT") &&
+      actor.permissions.includes("PROGRAM_READ"),
     canCreateProgram:
       !!actor.canCreateProgram && actor.permissions.includes("PROGRAM_EDIT"),
     canSubmit: actor.permissions.includes("PROGRAM_SUBMIT"),
@@ -66,7 +73,10 @@ function permissions(actor: ProgramActor, item?: ProgramItem) {
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 @Controller("chuong-trinh-dao-tao")
 export class ProgramController {
-  constructor(private readonly service: ProgramService) {}
+  constructor(
+    private readonly service: ProgramService,
+    private readonly exporter: ProgramExportService,
+  ) {}
   private result(item: ProgramItem, actor: ProgramActor) {
     return { ...item, permissions: permissions(actor, item) };
   }
@@ -168,6 +178,25 @@ export class ProgramController {
     return this.result(
       await this.service.structure(id, body, req.programActor),
       req.programActor,
+    );
+  }
+  @Get(":id/xuat-excel")
+  @ProgramPermission("PROGRAM_EXPORT")
+  @ApiOperation({
+    summary: "Xuất khung CTĐT đúng phiên bản/hướng trong phạm vi SQL",
+  })
+  @ApiProduces(XLSX_MIME)
+  async exportExcel(
+    @Param("id") id: string,
+    @Query() query: ProgramExportQueryDto,
+    @Req() req: ProgramRequest,
+  ) {
+    return new StreamableFile(
+      await this.exporter.export(id, query.trackId, req.programActor),
+      {
+        type: XLSX_MIME,
+        disposition: 'attachment; filename="Khung_CTDT.xlsx"',
+      },
     );
   }
   @Get(":id/kiem-tra")

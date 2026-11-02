@@ -116,6 +116,7 @@ export interface ProgramTrack {
   }[];
 }
 export interface ProgramItem extends ProgramInput {
+  storedRequiredCredits?: number | null;
   id: string;
   programId: string;
   status: string;
@@ -177,6 +178,7 @@ export interface ProgramItem extends ProgramInput {
   };
 }
 export abstract class ProgramRepository {
+  abstract exportDetail(id: string, actor: ProgramActor): Promise<ProgramItem>;
   abstract list(
     query: ProgramQuery,
     actor: ProgramActor,

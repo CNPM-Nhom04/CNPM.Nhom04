@@ -243,3 +243,5 @@ Không dùng frontend trỏ DB bản sao này làm giao diện thật hằng ng�
 - Chưa kiểm thử thao tác trình duyệt tự động:
   kiểm tra phê duyệt tự động của phiên làm việc chặn khởi động frontend test cổng 3101.
   Các bước test giao diện bằng tay ở trên vẫn cần thực hiện.
+
+Xuất Excel danh mục học phần theo bộ lọc/phạm vi: [hướng dẫn](../admin/FACULTIES_README.md#xuất-excel-danh-mục-học-phần).

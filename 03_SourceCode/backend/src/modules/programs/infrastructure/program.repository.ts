@@ -201,6 +201,7 @@ export class MysqlProgramRepository extends ProgramRepository {
         CAST(m.id AS CHAR) AS majorId,m.major_name AS majorName
        FROM organizational_units u JOIN organizational_unit_closure mc ON mc.ancestor_id=u.id
        JOIN majors m ON m.organizational_unit_id=mc.descendant_id
+       JOIN organizational_units mu ON mu.id=m.organizational_unit_id AND mu.status='ACTIVE'
        WHERE u.status='ACTIVE' AND m.status='ACTIVE' AND EXISTS(
          SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
            us.scope_type='GLOBAL'
@@ -418,6 +419,20 @@ export class MysqlProgramRepository extends ProgramRepository {
     }
     return item;
   }
+  exportDetail(id: string, actor: ProgramActor) {
+    return this.db.transaction("REPEATABLE READ", async (manager) => {
+      const item = await this.get(manager, id, actor);
+      const [details] = await manager.query(
+        "SELECT required_total_credits credits FROM program_ui_details WHERE program_version_id=?",
+        [id],
+      );
+      return {
+        ...item,
+        storedRequiredCredits:
+          details?.credits == null ? null : Number(details.credits),
+      };
+    });
+  }
   detail(id: string, actor: ProgramActor) {
     return this.get(this.db.manager, id, actor);
   }
@@ -557,7 +572,8 @@ export class MysqlProgramRepository extends ProgramRepository {
       const [reference] = await manager.query(
         `SELECT m.id FROM majors m JOIN education_levels e ON e.id=?
        JOIN organizational_units u ON u.id=? WHERE m.id=? AND m.status='ACTIVE' AND e.status='ACTIVE' AND u.status='ACTIVE'
-       AND EXISTS(SELECT 1 FROM organizational_unit_closure oc WHERE oc.ancestor_id=u.id AND oc.descendant_id=m.organizational_unit_id)`,
+       AND EXISTS(SELECT 1 FROM organizational_unit_closure oc WHERE oc.ancestor_id=u.id AND oc.descendant_id=m.organizational_unit_id)
+       AND EXISTS(SELECT 1 FROM organizational_units mu WHERE mu.id=m.organizational_unit_id AND mu.status='ACTIVE') FOR UPDATE`,
         [input.educationLevelId, input.managingUnitId, input.majorId],
       );
       if (!reference)

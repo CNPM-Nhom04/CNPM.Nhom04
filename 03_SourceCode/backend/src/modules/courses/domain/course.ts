@@ -29,7 +29,11 @@ export interface RevisionInput extends CourseVersionInput {
   expectedLatestVersionId: string;
 }
 export abstract class CourseRepository {
-  abstract list(query: CourseQuery, actor: CourseActor): Promise<any>;
+  abstract list(
+    query: CourseQuery,
+    actor: CourseActor,
+    all?: boolean,
+  ): Promise<any>;
   abstract units(actor: CourseActor): Promise<any>;
   abstract detail(id: string, actor: CourseActor): Promise<any>;
   abstract create(input: CreateCourseInput, actor: CourseActor): Promise<any>;

@@ -1,3 +1,4 @@
+import { MajorInputDto, MajorsQueryDto, UpdateMajorDto } from "./major.dto";
 import { AuthSecurityRepository } from "../../identity/domain/auth-security.repository";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
@@ -25,6 +26,29 @@ export class AdminService {
     private readonly security: AuthSecurityRepository,
   ) {}
 
+  listMajors(query: MajorsQueryDto) {
+    return this.repository.listMajors(query);
+  }
+  majorOptions() {
+    return this.repository.majorOptions();
+  }
+  majorDetail(id: string) {
+    this.userId(id);
+    return this.repository.majorDetail(id);
+  }
+  createMajor(input: MajorInputDto, actor: Actor) {
+    return this.repository.saveMajor(null, input, actor);
+  }
+  updateMajor(id: string, input: UpdateMajorDto, actor: Actor) {
+    this.userId(id);
+    const { expectedUpdatedAt, ...values } = input;
+    return this.repository.saveMajor(id, values, actor, expectedUpdatedAt);
+  }
+  async deleteMajor(id: string, expectedUpdatedAt: string, actor: Actor) {
+    this.userId(id);
+    await this.repository.deleteMajor(id, expectedUpdatedAt, actor);
+    return { message: "Đã xóa ngành chưa được sử dụng." };
+  }
   listUsers(query: UsersQueryDto) {
     return this.repository.listUsers(query);
   }
@@ -131,4 +155,3 @@ export class AdminService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
- 

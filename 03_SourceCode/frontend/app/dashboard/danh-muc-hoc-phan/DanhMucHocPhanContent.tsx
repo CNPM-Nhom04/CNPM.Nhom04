@@ -51,6 +51,7 @@ export default function DanhMucHocPhanContent() {
   const [formError, setFormError] = useState("");
   const [detailError, setDetailError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
     courseService
@@ -227,12 +228,32 @@ export default function DanhMucHocPhanContent() {
             Ngân hàng học phần, phiên bản nội dung và đơn vị quản lý.
           </p>
         </div>
-        {list?.permissions.canManage && (
-          <Button disabled={busy} onClick={() => begin("new")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Thêm học phần mới
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="outline"
+            disabled={exporting || loading || !!error || !list}
+            isLoading={exporting}
+            onClick={async () => {
+              setExporting(true);
+              setError("");
+              try {
+                await courseService.exportExcel(search, status, unitId);
+              } catch (e) {
+                setError(message(e));
+              } finally {
+                setExporting(false);
+              }
+            }}
+          >
+            Xuất Excel danh mục
           </Button>
-        )}
+          {list?.permissions.canManage && (
+            <Button disabled={busy} onClick={() => begin("new")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Thêm học phần mới
+            </Button>
+          )}
+        </div>
       </div>
       <p className="text-sm text-slate-600">
         Bắt buộc/tự chọn và khối kiến thức được xác định khi xếp học phần vào

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { loginDestination } from "@/lib/loginDestination";
+import { authRequest, type SessionUser } from "@/lib/services/authService";
 import { Button } from "@/components/ui";
 
 export default function LoginPage() {
@@ -30,26 +32,9 @@ export default function LoginPage() {
       if (result.user?.mustChangePassword) {
         router.replace("/doi-mat-khau");
       } else {
+        const profile = await authRequest<SessionUser>("profile");
         const next = new URLSearchParams(window.location.search).get("next");
-        let target =
-          result.user?.role === "ADMIN"
-            ? "/dashboard/admin/nguoi-dung"
-            : "/dashboard";
-        if (next) {
-          try {
-            const parsed = new URL(next, window.location.origin);
-            if (
-              parsed.origin === window.location.origin &&
-              (parsed.pathname === "/dashboard" ||
-                parsed.pathname.startsWith("/dashboard/") ||
-                parsed.pathname === "/doi-mat-khau")
-            )
-              target = parsed.pathname + parsed.search;
-          } catch {
-            /* Invalid return URLs use the default authorized landing page. */
-          }
-        }
-        router.replace(target);
+        router.replace(loginDestination(profile, next, window.location.origin));
       }
       router.refresh();
     } catch (error) {
@@ -104,6 +89,9 @@ export default function LoginPage() {
             {error}
           </p>
         )}
+        <Link href="/" className="block text-sm text-emerald-700 underline">
+          ← Về trang chủ
+        </Link>
         <Link
           href="/quen-mat-khau"
           className="block text-sm text-blue-600 underline"
@@ -117,4 +105,3 @@ export default function LoginPage() {
     </main>
   );
 }
- 

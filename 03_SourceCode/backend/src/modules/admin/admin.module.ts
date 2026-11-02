@@ -1,3 +1,5 @@
+import { FacultyService } from "./application/faculty.service";
+import { MajorImportService } from "./application/major-import.service";
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module";
 import { AdminRepository } from "./domain/admin.repository";
@@ -11,6 +13,8 @@ import { AdminGuard } from "./presentation/admin.guard";
   controllers: [AdminController],
   providers: [
     AdminService,
+    FacultyService,
+    MajorImportService,
     AdminGuard,
     { provide: AdminRepository, useClass: MysqlAdminRepository },
   ],

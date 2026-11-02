@@ -180,3 +180,11 @@ Unit-transfer safeguard: if all current data scopes are ORG_UNIT, changing the w
 unit while keeping scopeMode=KEEP is rejected. Choose UNIT to move data access with
 the new work unit, or another explicit scope choice if authorized. The UI displays
 a reminder. Changing a label alone must not leave a user assigned to the old faculty.
+
+## Quản lý ngành đào tạo
+
+Đã bổ sung trang Admin → Ngành đào tạo và API /admin/nganh-dao-tao, dùng bảng majors có sẵn. Xem [SQL mapping, quyền, API và hướng dẫn test](MAJORS_README.md).
+
+Chức năng ngành đào tạo có nhập Excel theo mẫu, xem trước lỗi và lưu nguyên giao dịch; xem [MAJORS_README.md](./MAJORS_README.md#nhập-ngành-đào-tạo-bằng-excel).
+
+Quản lý khoa và hướng dẫn test: [FACULTIES_README.md](./FACULTIES_README.md).

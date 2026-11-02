@@ -1,3 +1,4 @@
+import { canUseDashboard } from "@/lib/accountAccess";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/server/session";
@@ -22,12 +23,14 @@ export default async function ChangePasswordPage() {
         )}
         <PasswordForm mode="change" minimum={user.passwordMinLength} />
         {!user.mustChangePassword && (
-          <Link href="/dashboard" className="block text-sm text-blue-600">
-            Về trang tổng quan
+          <Link
+            href={canUseDashboard(user) ? "/dashboard" : "/"}
+            className="block text-sm text-blue-600"
+          >
+            Về trang chính
           </Link>
         )}
       </div>
     </main>
   );
 }
- 

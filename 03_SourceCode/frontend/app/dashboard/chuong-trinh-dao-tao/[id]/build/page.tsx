@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Save, Send, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { downloadExcel } from "@/lib/services/excelDownload";
 import { Button, Input, Badge } from "@/components/ui";
 import {
   ProgramSqlDetails,
@@ -201,6 +202,40 @@ export default function ProgramBuilderPage() {
       {!loading && program && (
         <>
           <div className="flex flex-wrap gap-3">
+            {program.permissions.canExport && (
+              <Button
+                variant="outline"
+                disabled={busy || dirty || !track}
+                onClick={async () => {
+                  if (!track) return;
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await downloadExcel(
+                      `/api/chuong-trinh-dao-tao/${program.id}/xuat-excel?` +
+                        new URLSearchParams({ trackId: track.id }),
+                      `Khung_CTDT_${program.maPhienBan}_${track.code}.xlsx`,
+                    );
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e
+                        : new Error("Không thể xuất Excel."),
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Xuất Excel hướng đang xem
+              </Button>
+            )}
+            {dirty && (
+              <span className="self-center text-sm text-amber-800">
+                Lưu thay đổi trước khi xuất Excel.
+              </span>
+            )}
+
             {editable && (
               <Link
                 href={`/dashboard/chuong-trinh-dao-tao/tao-moi?edit=${program.id}`}

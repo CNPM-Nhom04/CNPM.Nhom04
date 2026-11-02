@@ -1,5 +1,8 @@
+import { CourseExportService } from "../application/course-export.service";
+import { XLSX_MIME } from "../../../core/excel/workbook";
 import {
   Body,
+  StreamableFile,
   Controller,
   Get,
   Param,
@@ -10,7 +13,12 @@ import {
   UsePipes,
   ValidationPipe,
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+  ApiProduces,
+} from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../identity/presentation/jwt-auth.guard";
 import { CourseService } from "../application/course.service";
 import {
@@ -32,7 +40,10 @@ import { CourseGuard, CourseRequest, ManageCourses } from "./course.guard";
 )
 @Controller("danh-muc-hoc-phan")
 export class CourseController {
-  constructor(private readonly service: CourseService) {}
+  constructor(
+    private readonly service: CourseService,
+    private readonly exporter: CourseExportService,
+  ) {}
   @Get()
   @ApiOperation({
     summary: "Danh mục theo phạm vi SQL; bản mới nhất và bản ACTIVE riêng biệt",
@@ -42,6 +53,18 @@ export class CourseController {
   }
   @Get("don-vi") units(@Req() req: CourseRequest) {
     return this.service.units(req.courseActor);
+  }
+  @Get("xuat-excel")
+  @ApiOperation({ summary: "Xuất tất cả học phần khớp bộ lọc và phạm vi SQL" })
+  @ApiProduces(XLSX_MIME)
+  async exportExcel(@Query() query: CourseQueryDto, @Req() req: CourseRequest) {
+    return new StreamableFile(
+      await this.exporter.export(query, req.courseActor),
+      {
+        type: XLSX_MIME,
+        disposition: 'attachment; filename="Danh_Muc_Hoc_Phan.xlsx"',
+      },
+    );
   }
   @Get(":id") detail(@Param("id") id: string, @Req() req: CourseRequest) {
     return this.service.detail(id, req.courseActor);
