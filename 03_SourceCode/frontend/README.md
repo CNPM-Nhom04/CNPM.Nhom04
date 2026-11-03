@@ -1,3 +1,7 @@
+## Cài mới và bàn giao cho QA
+
+Xem [quy trình clone, restore database và chạy test](../../docs/LOCAL_TEST_SETUP.md). Cần cấu hình DATABASE_URL cùng database với backend và chạy npx prisma generate trước lần chạy đầu.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -48,7 +52,7 @@ Cấu hình `frontend/.env.local`:
 BACKEND_API_URL=http://127.0.0.1:3002
 ```
 URL này là địa chỉ backend nhìn từ server Next.js, không phải URL trình duyệt.
-Nếu chưa cấu hình, mặc định là http://127.0.0.1:3000.
+Nếu chưa cấu hình, mặc định là http://127.0.0.1:3002.
 Trong Docker, dùng tên service backend và cổng nội bộ tương ứng.
 
 Chạy trong 2 terminal từ thư mục gốc dự án (WSL/bash):
@@ -66,7 +70,7 @@ Nếu chọn NestJS cổng 3000, đặt BACKEND_API_URL tương ứng và chạy
 bằng `npm run dev -- --port 3001`.
 
 Kiểm tra trên giao diện:
-1. Đăng nhập, tự chuyển đến trang báo cáo.
+1. Đăng nhập rồi chọn Tra cứu & Báo cáo trong menu theo quyền được cấp.
 2. Bảng và 4 thẻ thống kê lấy từ API; tìm kiếm chờ 300 ms, hủy request cũ.
 3. Bậc đào tạo lấy từ database; đổi bộ lọc trở về trang 1.
 4. Chuyển trang bằng Trang trước/Trang sau (20 dòng/trang).
@@ -89,3 +93,14 @@ Dùng cùng BACKEND_API_URL và cookie HttpOnly như trang báo cáo, không c�
 Backend cần chạy npm run migration:run trước lần sử dụng đầu tiên.
 Hướng dẫn API, payload, migration và bài test tích hợp nằm tại
 ../backend/src/modules/admin/README.md.
+Trang chủ công khai: `/`, `/chuong-trinh-dao-tao`, `/quy-che`, `/dang-ky-thong-tin`. Hướng dẫn SQL/API/test: [Public Portal README](../backend/src/modules/public-portal/README.md).
+
+Học viên tra cứu **CTĐT của tôi** tại `/ctdt-cua-toi`; danh tính/phân công lấy từ SQL theo phiên đăng nhập. Hướng dẫn đối chiếu DBeaver và test: [Student Program README](../backend/src/modules/student-program/README.md).
+
+Học viên đăng nhập tại trang chủ và dùng `/ctdt-cua-toi` bên ngoài dashboard. Nhân sự quản lý chuyển giữa hai khu vực bằng nút Dashboard/Trang chủ. Hai giao diện đăng ký học phần mẫu đã được xóa; dữ liệu SQL lớp/đăng ký phục vụ điểm vẫn giữ nguyên.
+
+Admin nhập tài khoản học viên theo lớp tại `/dashboard/admin/lop-hoc-vien`: tạo lớp gắn phiên bản/hướng SQL → tải mẫu → kiểm tra Excel → tạo tài khoản và tải file bàn giao. Học viên phải đổi mật khẩu lần đầu, sau đó tra cứu `/ctdt-cua-toi`. Chạy migration mới trước khi dùng. Hướng dẫn test và đối chiếu bảng DBeaver: [Student Accounts README](../backend/src/modules/student-accounts/README.md).
+
+Ma trận quyền và các chức năng chưa triển khai: [Đối chiếu phân quyền](../../docs/ACCESS_REVIEW.md). Xuất Excel báo cáo/so sánh cần `PROGRAM_EXPORT` ngoài quyền xem chức năng; Admin hiện không được cấp quyền xuất này trong SQL.
+
+Trong **Lớp & Tài khoản học viên**, nút **Liên kết tài khoản** dành cho tài khoản STUDENT đã có: chọn hồ sơ từ SQL hoặc tạo hồ sơ mới theo mã học viên đã xác minh, gắn đúng lớp/CTĐT và giữ nguyên mật khẩu/quyền. Chi tiết: [Student Accounts README](../backend/src/modules/student-accounts/README.md).

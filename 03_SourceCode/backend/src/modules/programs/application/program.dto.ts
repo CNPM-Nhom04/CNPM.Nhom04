@@ -185,3 +185,12 @@ export class ReviewDto extends RevisionDto {
   @ApiPropertyOptional() @IsString() @MaxLength(10000) yKienDongGop = "";
   @ApiPropertyOptional() @IsString() @MaxLength(150) soBienBan = "";
 }
+
+export class ProgramExportQueryDto {
+  @ApiPropertyOptional({
+    description: "ID hướng thuộc phiên bản; bỏ trống để xuất tất cả hướng",
+  })
+  @IsOptional()
+  @Matches(/^[1-9]\d{0,19}$/)
+  trackId?: string;
+}

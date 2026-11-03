@@ -15,7 +15,11 @@ import {
   ComparisonDto,
   ComparisonOptionsDto,
 } from "../application/comparison.dto";
-import { ComparisonGuard, ComparisonRequest } from "./comparison.guard";
+import {
+  ComparisonGuard,
+  ComparisonRequest,
+  ComparisonExportPermission,
+} from "./comparison.guard";
 @ApiTags("Comparisons - So sánh CTĐT")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, ComparisonGuard)
@@ -44,6 +48,7 @@ export class ComparisonController {
     return this.service.compare(req.user.userId, query);
   }
   @Get("export")
+  @ComparisonExportPermission()
   @ApiOperation({
     summary: "Xuất đối chiếu thật .xlsx, kiểm tra lại quyền và phạm vi",
   })

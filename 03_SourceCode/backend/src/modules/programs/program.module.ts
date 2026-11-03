@@ -1,3 +1,4 @@
+import { ProgramExportService } from "./application/program-export.service";
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module";
 import { ProgramRepository } from "./domain/program";
@@ -10,6 +11,7 @@ import { ProgramGuard } from "./presentation/program.guard";
   exports: [ProgramRepository, ProgramService],
   controllers: [ProgramController],
   providers: [
+    ProgramExportService,
     ProgramService,
     ProgramGuard,
     { provide: ProgramRepository, useClass: MysqlProgramRepository },

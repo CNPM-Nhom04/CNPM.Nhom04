@@ -102,3 +102,5 @@ Trang /dang-nhap thực hiện đăng nhập; /dashboard/bao-cao dùng API để
 lọc, phân trang, thống kê, xuất Excel và tải đủ các trang trước khi in.
 Xem frontend/README.md để cấu hình BACKEND_API_URL và cổng ứng dụng.
 Luồng qua Next.js không cần bật CORS tại NestJS.
+
+Xuất Excel báo cáo cần đồng thời `PROGRAM_READ` và `PROGRAM_EXPORT`; chỉ có quyền đọc vẫn được xem/in báo cáo nhưng không tải Excel.

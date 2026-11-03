@@ -1,3 +1,5 @@
+import { FacultyInput, FacultyItem, FacultyQuery } from "../domain/faculty";
+import { MajorImportLimits, MajorImportRow } from "../domain/major-import";
 import {
   BadRequestException,
   ConflictException,
@@ -22,6 +24,17 @@ import {
   UserRole,
 } from "../domain/admin.repository";
 
+import { MajorInput, MajorItem, MajorQuery } from "../domain/major";
+const MAJOR_FROM =
+  " FROM majors m JOIN organizational_units u ON u.id=m.organizational_unit_id";
+const MAJOR_SELECT =
+  `SELECT CAST(m.id AS CHAR) id,m.major_code majorCode,m.major_name majorName,
+  CAST(m.organizational_unit_id AS CHAR) unitId,u.unit_code unitCode,u.unit_name unitName,u.status unitStatus,m.status,
+  DATE_FORMAT(m.updated_at,'%Y-%m-%d %H:%i:%s.%f') updatedAt,
+  (SELECT COUNT(*) FROM training_programs p WHERE p.major_id=m.id) programCount,
+  (SELECT COUNT(*) FROM user_scopes s WHERE s.major_id=m.id) userScopeCount,
+  (SELECT COUNT(*) FROM registration_period_scopes s WHERE s.major_id=m.id) registrationScopeCount` +
+  MAJOR_FROM;
 const CATEGORIES = {
   KHOA_QUAN_LY: {
     table: "organizational_units",
@@ -101,6 +114,378 @@ function pageResult<T>(
 export class MysqlAdminRepository extends AdminRepository {
   constructor(private readonly dataSource: DataSource) {
     super();
+  }
+
+  private mapMajor(row): MajorItem {
+    const programCount = Number(row.programCount),
+      userScopeCount = Number(row.userScopeCount),
+      registrationScopeCount = Number(row.registrationScopeCount);
+    return {
+      ...row,
+      id: String(row.id),
+      unitId: String(row.unitId),
+      programCount,
+      userScopeCount,
+      registrationScopeCount,
+      identityLocked:
+        programCount + userScopeCount + registrationScopeCount > 0,
+    };
+  }
+  private async getMajor(
+    manager: EntityManager,
+    id: string,
+    lock = false,
+  ): Promise<MajorItem> {
+    const [row] = await manager.query(
+      MAJOR_SELECT + " WHERE m.id=?" + (lock ? " FOR UPDATE" : ""),
+      [id],
+    );
+    if (!row) throw new NotFoundException("Không tìm thấy ngành đào tạo.");
+    return this.mapMajor(row);
+  }
+  majorDetail(id: string) {
+    return this.getMajor(this.dataSource.manager, id);
+  }
+  async majorOptions() {
+    const units = await this.dataSource.query(
+      "SELECT CAST(id AS CHAR) id,unit_code code,unit_name name FROM organizational_units WHERE status='ACTIVE' ORDER BY unit_name,id",
+    );
+    return { units };
+  }
+  async listMajors(query: MajorQuery): Promise<PageResult<MajorItem>> {
+    const search = query.searchTerm || "",
+      status = query.status || "ALL",
+      unit = query.unitId || "";
+    const where =
+      " WHERE (?='' OR LOCATE(?,m.major_code)>0 OR LOCATE(?,m.major_name)>0 OR LOCATE(?,u.unit_name)>0) AND (?='ALL' OR m.status=?) AND (?='' OR m.organizational_unit_id=?)";
+    const args = [search, search, search, search, status, status, unit, unit];
+    const rows = await this.dataSource.query(
+      MAJOR_SELECT + where + " ORDER BY m.major_code,m.id LIMIT ? OFFSET ?",
+      [...args, query.limit, (query.page - 1) * query.limit],
+    );
+    const [count] = await this.dataSource.query(
+      "SELECT COUNT(*) total" + MAJOR_FROM + where,
+      args,
+    );
+    return pageResult(
+      rows.map((row) => this.mapMajor(row)),
+      Number(count.total),
+      query,
+    );
+  }
+  private majorVersion(item: MajorItem, expected?: string) {
+    if (!expected || item.updatedAt !== expected)
+      throw new ConflictException(
+        "Ngành đã thay đổi sau khi mở form. Đóng form, tải lại danh sách rồi thử lại.",
+      );
+  }
+  private facultySelect() {
+    const refs = [
+      ["training_programs", "managing_unit_id"],
+      ["majors", "organizational_unit_id"],
+      ["users", "organizational_unit_id"],
+      ["user_scopes", "organizational_unit_id"],
+      ["courses", "owning_unit_id"],
+      ["students", "organizational_unit_id"],
+      ["thesis_supervisors", "owning_unit_id"],
+      ["audit_logs", "scope_unit_id"],
+      ["organizational_units", "parent_id"],
+    ];
+    const count = (table: string, column: string) =>
+      `(SELECT COUNT(*) FROM ${table} ref WHERE ref.${column}=u.id)`;
+    return `SELECT CAST(u.id AS CHAR) id,u.unit_code code,u.unit_name name,COALESCE(u.description,'') description,u.status,
+      CAST(u.parent_id AS CHAR) parentId,p.unit_name parentName,DATE_FORMAT(u.updated_at,'%Y-%m-%d %H:%i:%s.%f') updatedAt,
+      ${count("majors", "organizational_unit_id")} majorCount,${count("training_programs", "managing_unit_id")} programCount,
+      ${count("organizational_units", "parent_id")} childCount,(${refs.map(([t, c]) => count(t, c)).join("+")}) referenceCount
+      FROM organizational_units u LEFT JOIN organizational_units p ON p.id=u.parent_id`;
+  }
+  private mapFaculty(row): FacultyItem {
+    return {
+      ...row,
+      majorCount: Number(row.majorCount),
+      programCount: Number(row.programCount),
+      childCount: Number(row.childCount),
+      referenceCount: Number(row.referenceCount),
+    };
+  }
+  async listFaculties(query: FacultyQuery) {
+    const search = query.searchTerm || "",
+      status = query.status || "ALL";
+    const where =
+      " WHERE u.unit_type='FACULTY' AND (?='ALL' OR u.status=?) AND (?='' OR LOCATE(?,u.unit_code)>0 OR LOCATE(?,u.unit_name)>0)";
+    const params = [status, status, search, search, search];
+    const rows = await this.dataSource.query(
+      this.facultySelect() +
+        where +
+        " ORDER BY u.unit_name,u.id LIMIT ? OFFSET ?",
+      [...params, query.limit, (query.page - 1) * query.limit],
+    );
+    const [count] = await this.dataSource.query(
+      "SELECT COUNT(*) total FROM organizational_units u" + where,
+      params,
+    );
+    return pageResult<FacultyItem>(
+      rows.map((row) => this.mapFaculty(row)),
+      Number(count.total),
+      query,
+    );
+  }
+  private async faculty(manager: EntityManager, id: string, lock = false) {
+    if (lock)
+      await manager.query(
+        "SELECT id FROM organizational_units WHERE id=? AND unit_type='FACULTY' FOR UPDATE",
+        [id],
+      );
+    const [row] = await manager.query(
+      this.facultySelect() + " WHERE u.id=? AND u.unit_type='FACULTY'",
+      [id],
+    );
+    if (!row)
+      throw new NotFoundException(
+        "Không tìm thấy khoa. Bộ môn/đơn vị khác được quản lý trong danh mục dùng chung.",
+      );
+    return this.mapFaculty(row);
+  }
+  async saveFaculty(
+    id: string | null,
+    input: FacultyInput,
+    actor: Actor,
+    expectedUpdatedAt?: string,
+  ) {
+    return this.write(actor, async (manager) => {
+      const old = id ? await this.faculty(manager, id, true) : null;
+      const [duplicate] = await manager.query(
+        "SELECT id FROM organizational_units WHERE unit_code=? AND id<>? LIMIT 1",
+        [input.code, id || "0"],
+      );
+      if (duplicate) throw new ConflictException("Mã khoa/đơn vị đã tồn tại.");
+      if (old && old.updatedAt !== expectedUpdatedAt)
+        throw new ConflictException(
+          "Khoa đã thay đổi. Tải lại danh sách trước khi sửa.",
+        );
+      if (old)
+        await manager.query(
+          "UPDATE organizational_units SET unit_code=?,unit_name=?,description=?,status=? WHERE id=?",
+          [input.code, input.name, input.description, input.status, id],
+        );
+      else {
+        const saved = await manager.query(
+          "INSERT INTO organizational_units(unit_code,unit_name,description,status,unit_type) VALUES(?,?,?,?,'FACULTY')",
+          [input.code, input.name, input.description, input.status],
+        );
+        id = String(saved.insertId);
+      }
+      const item = await this.faculty(manager, id!);
+      await this.audit(
+        manager,
+        actor,
+        old ? "UPDATE" : "CREATE",
+        "organizational_units",
+        id,
+        old,
+        item,
+        (old ? "Cập nhật khoa " : "Thêm khoa ") + item.code,
+      );
+      return item;
+    });
+  }
+  async deleteFaculty(id: string, expectedUpdatedAt: string, actor: Actor) {
+    return this.write(actor, async (manager) => {
+      const old = await this.faculty(manager, id, true);
+      if (old.updatedAt !== expectedUpdatedAt)
+        throw new ConflictException("Khoa đã thay đổi. Tải lại trước khi xóa.");
+      if (old.referenceCount)
+        throw new ConflictException(
+          "Khoa còn dữ liệu hoặc đơn vị con. Có thể chuyển sang ngừng hoạt động thay vì xóa.",
+        );
+      await manager.query(
+        "DELETE FROM organizational_unit_closure WHERE descendant_id=?",
+        [id],
+      );
+      await manager.query("DELETE FROM organizational_units WHERE id=?", [id]);
+      await this.audit(
+        manager,
+        actor,
+        "DELETE",
+        "organizational_units",
+        id,
+        old,
+        null,
+        "Xóa khoa " + old.code,
+      );
+    });
+  }
+  async majorImportLimits(): Promise<MajorImportLimits> {
+    const settings = await this.dataSource.query(
+      "SELECT setting_key,setting_value FROM system_settings WHERE setting_key IN ('import.max_file_mb','import.max_rows')",
+    );
+    const values = Object.fromEntries(
+      settings.map((row) => [row.setting_key, Number(row.setting_value)]),
+    );
+    const mb = values["import.max_file_mb"],
+      rows = values["import.max_rows"];
+    if (
+      !Number.isFinite(mb) ||
+      mb <= 0 ||
+      !Number.isSafeInteger(rows) ||
+      rows < 1
+    )
+      throw new BadRequestException(
+        "Cần cấu hình import.max_file_mb và import.max_rows hợp lệ trong CSDL.",
+      );
+    return {
+      maxFileBytes: Math.min(Math.floor(mb * 1024 * 1024), 5 * 1024 * 1024),
+      maxRows: Math.min(rows, 5000),
+    };
+  }
+  private async checkMajorRows(
+    manager: EntityManager,
+    rows: MajorImportRow[],
+    lock = false,
+  ): Promise<MajorImportRow[]> {
+    // SQL comparisons use the database collation, including accented/case-insensitive unit codes.
+    const result: MajorImportRow[] = [];
+    for (const row of rows) {
+      const checked = { ...row, errors: [...row.errors] };
+      const [unit] = await manager.query(
+        "SELECT CAST(id AS CHAR) id,unit_name name,status FROM organizational_units WHERE unit_code=?" +
+          (lock ? " FOR UPDATE" : ""),
+        [row.unitCode],
+      );
+      if (!unit) checked.errors.push("Mã đơn vị không tồn tại trong CSDL.");
+      else if (unit.status !== "ACTIVE")
+        checked.errors.push("Đơn vị đã ngừng hoạt động.");
+      else {
+        checked.unitId = String(unit.id);
+        checked.unitName = unit.name;
+      }
+      const [existing] = await manager.query(
+        "SELECT id FROM majors WHERE major_code=?",
+        [row.majorCode],
+      );
+      if (existing) checked.errors.push("Mã ngành đã tồn tại trong CSDL.");
+      result.push(checked);
+    }
+    return result;
+  }
+  async checkMajorImport(rows: MajorImportRow[]) {
+    return this.checkMajorRows(this.dataSource.manager, rows);
+  }
+  async commitMajorImport(rows: MajorImportRow[], actor: Actor) {
+    return this.write(actor, async (manager) => {
+      const limits = await this.majorImportLimits();
+      if (rows.length > limits.maxRows)
+        throw new BadRequestException("Số dòng vượt cấu hình nhập hiện tại.");
+      const checked = await this.checkMajorRows(manager, rows, true);
+      const invalid = checked.filter((row) => row.errors.length);
+      if (invalid.length)
+        throw new ConflictException(
+          invalid
+            .slice(0, 20)
+            .map((row) => `Dòng ${row.rowNumber}: ${row.errors.join(" ")}`),
+        );
+      for (const row of checked) {
+        const saved = await manager.query(
+          "INSERT INTO majors(major_code,major_name,organizational_unit_id,status) VALUES(?,?,?,?)",
+          [row.majorCode, row.majorName, row.unitId, row.status],
+        );
+        await this.audit(
+          manager,
+          actor,
+          "CREATE",
+          "majors",
+          String(saved.insertId),
+          null,
+          row,
+          "Nhập Excel ngành " + row.majorCode,
+        );
+      }
+      return { created: checked.length };
+    });
+  }
+  async saveMajor(
+    id: string | null,
+    input: MajorInput,
+    actor: Actor,
+    expectedUpdatedAt?: string,
+  ): Promise<MajorItem> {
+    return this.write(actor, async (manager) => {
+      const old = id ? await this.getMajor(manager, id, true) : null;
+      if (old) {
+        this.majorVersion(old, expectedUpdatedAt);
+        if (
+          old.identityLocked &&
+          (old.majorCode !== input.majorCode || old.unitId !== input.unitId)
+        )
+          throw new ConflictException(
+            "Ngành đã được sử dụng: không đổi mã hoặc đơn vị quản lý. Có thể sửa tên hoặc ngừng sử dụng.",
+          );
+      }
+      const [duplicate] = await manager.query(
+        "SELECT id FROM majors WHERE major_code=? AND id<>? LIMIT 1",
+        [input.majorCode, id || "0"],
+      );
+      if (duplicate) throw new ConflictException("Mã ngành đã tồn tại.");
+      const [unit] = await manager.query(
+        "SELECT id,status FROM organizational_units WHERE id=? FOR UPDATE",
+        [input.unitId],
+      );
+      if (!unit) throw new BadRequestException("Đơn vị quản lý không tồn tại.");
+      if (
+        unit.status !== "ACTIVE" &&
+        (!old || old.unitId !== input.unitId || input.status === "ACTIVE")
+      )
+        throw new BadRequestException("Chọn đơn vị quản lý đang hoạt động.");
+      if (old)
+        await manager.query(
+          "UPDATE majors SET major_code=?,major_name=?,organizational_unit_id=?,status=? WHERE id=?",
+          [input.majorCode, input.majorName, input.unitId, input.status, id],
+        );
+      else {
+        const saved = await manager.query(
+          "INSERT INTO majors(major_code,major_name,organizational_unit_id,status) VALUES(?,?,?,?)",
+          [input.majorCode, input.majorName, input.unitId, input.status],
+        );
+        id = String(saved.insertId);
+      }
+      const item = await this.getMajor(manager, id!);
+      await this.audit(
+        manager,
+        actor,
+        old ? "UPDATE" : "CREATE",
+        "majors",
+        id,
+        old,
+        item,
+        (old ? "Cập nhật ngành " : "Thêm ngành ") + item.majorCode,
+      );
+      return item;
+    });
+  }
+  async deleteMajor(
+    id: string,
+    expectedUpdatedAt: string,
+    actor: Actor,
+  ): Promise<void> {
+    await this.write(actor, async (manager) => {
+      const old = await this.getMajor(manager, id, true);
+      this.majorVersion(old, expectedUpdatedAt);
+      if (old.identityLocked)
+        throw new ConflictException(
+          "Ngành đang được CTĐT hoặc phạm vi dữ liệu sử dụng. Hãy ngừng sử dụng thay vì xóa.",
+        );
+      await manager.query("DELETE FROM majors WHERE id=?", [id]);
+      await this.audit(
+        manager,
+        actor,
+        "DELETE",
+        "majors",
+        id,
+        old,
+        null,
+        "Xóa ngành " + old.majorCode,
+      );
+    });
   }
 
   private mapUser(row): UserItem {

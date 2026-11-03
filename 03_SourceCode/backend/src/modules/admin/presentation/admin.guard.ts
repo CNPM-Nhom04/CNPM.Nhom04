@@ -20,6 +20,9 @@ export class AdminGuard implements CanActivate {
     const permission = {
       "nguoi-dung": "USER_MANAGE",
       "master-data": "MASTERDATA_MANAGE",
+      "nganh-dao-tao": "MASTERDATA_MANAGE",
+      khoa: "MASTERDATA_MANAGE",
+      "cong-thong-tin": "MASTERDATA_MANAGE",
       "cau-hinh": "SETTINGS_MANAGE",
       "audit-log": "AUDIT_READ_ALL",
     }[resource];
@@ -41,4 +44,3 @@ export class AdminGuard implements CanActivate {
     return true;
   }
 }
- 

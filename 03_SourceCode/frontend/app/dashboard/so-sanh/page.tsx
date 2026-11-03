@@ -1,4 +1,5 @@
 "use client";
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import { useEffect, useState } from "react";
 import { GitCompare, FileSpreadsheet } from "lucide-react";
 import {
@@ -340,6 +341,7 @@ function JsonRows<T extends object>({ rows }: { rows: Difference<T>[] }) {
   );
 }
 export default function SoSanhCTDTPage() {
+  const canExport = !!useSessionUser()?.permissions.includes("PROGRAM_EXPORT");
   const [a, setA] = useState<Selection>({ version: null, track: "" }),
     [b, setB] = useState<Selection>({ version: null, track: "" });
   const [result, setResult] = useState<ComparisonResult | null>(null),
@@ -396,7 +398,7 @@ export default function SoSanhCTDTPage() {
     result.b.versionId === vb &&
     result.b.trackId === tb;
   async function download() {
-    if (!ready) return;
+    if (!ready || !canExport) return;
     setExporting(true);
     setError("");
     const query: ComparisonQuery = {
@@ -458,7 +460,8 @@ export default function SoSanhCTDTPage() {
         </div>
         <button
           className={button}
-          disabled={!ready || loading || exporting}
+          disabled={!canExport || !ready || loading || exporting}
+          title={!canExport ? "Cần quyền PROGRAM_EXPORT để xuất Excel" : undefined}
           onClick={download}
         >
           <FileSpreadsheet className="mr-2 inline h-4 w-4" />

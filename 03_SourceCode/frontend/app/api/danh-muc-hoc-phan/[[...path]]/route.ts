@@ -7,7 +7,7 @@ async function proxy(
   const path = ((await context.params).path ?? []).join("/");
   const allowed =
     request.method === "GET"
-      ? /^(?:|don-vi|[1-9]\d{0,19})$/.test(path)
+      ? /^(?:|don-vi|xuat-excel|[1-9]\d{0,19})$/.test(path)
       : /^(?:|[1-9]\d{0,19}\/(?:phien-ban|trang-thai)|[1-9]\d{0,19}\/phien-ban\/[1-9]\d{0,19}\/kich-hoat)$/.test(
           path,
         );
@@ -54,7 +54,7 @@ async function proxy(
           ...(body ? { "Content-Type": "application/json" } : {}),
         },
         cache: "no-store",
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(90000),
       },
     );
     if (!upstream.ok) {
@@ -74,8 +74,16 @@ async function proxy(
     return new Response(upstream.body, {
       status: upstream.status,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          upstream.headers.get("Content-Type") || "application/octet-stream",
         "Cache-Control": "no-store",
+        ...(upstream.headers.get("Content-Disposition")
+          ? {
+              "Content-Disposition": upstream.headers.get(
+                "Content-Disposition",
+              )!,
+            }
+          : {}),
       },
     });
   } catch {

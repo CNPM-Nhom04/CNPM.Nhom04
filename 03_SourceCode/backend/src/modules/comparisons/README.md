@@ -176,3 +176,4 @@ Dữ liệu riêng nhập trên máy không tự đi theo Git; nhóm cần impor
   ngoài khoa, thu hồi role/session và 18 kiểm tra hợp đồng, qua; không có lỗi runtime.
 - Clone và quyền kết nối clone đã được dọn; không thêm tài khoản hay thay đổi nội dung CTĐT trên nguồn.
 - Không có migration mới; thay đổi gồm 19 file (3 sửa, 16 mới). Chưa commit/push tự động.
+Xuất Excel so sánh cần đồng thời `PROGRAM_COMPARE` và `PROGRAM_EXPORT`; cả hai phía vẫn được giới hạn theo phạm vi SQL.

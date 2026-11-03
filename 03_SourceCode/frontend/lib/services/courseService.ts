@@ -1,3 +1,4 @@
+import { downloadExcel } from "./excelDownload";
 export interface CourseVersion {
   id: string;
   versionNo: number;
@@ -86,6 +87,12 @@ const post = <T>(path: string, body: unknown = {}) =>
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 export const courseService = {
+  exportExcel: (search: string, status: string, unitId: string) =>
+    downloadExcel(
+      "/api/danh-muc-hoc-phan/xuat-excel?" +
+        new URLSearchParams({ search, status, ...(unitId ? { unitId } : {}) }),
+      "Danh_Muc_Hoc_Phan.xlsx",
+    ),
   list(
     search: string,
     status: string,

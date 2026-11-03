@@ -9,8 +9,6 @@ import {
   GraduationCap,
   CheckSquare,
   GitCompare,
-  CalendarDays,
-  UserCheck,
   FileSpreadsheet,
   Database,
   Sliders,
@@ -65,18 +63,8 @@ const menuGroups = [
     ],
   },
   {
-    title: "HỌC VỤ & ĐĂNG KÝ",
+    title: "HỌC VỤ & BÁO CÁO",
     items: [
-      {
-        name: "Đợt đăng ký & Xử lý lớp",
-        href: "/dashboard/dang-ky-hoc-phan",
-        icon: CalendarDays,
-      },
-      {
-        name: "Cổng học viên (ĐKHP)",
-        href: "/dashboard/sinh-vien/dang-ky",
-        icon: UserCheck,
-      },
       {
         name: "Tra cứu & Báo cáo Excel",
         href: "/dashboard/bao-cao",
@@ -103,9 +91,29 @@ const menuGroups = [
         icon: Database,
       },
       {
+        name: "Cổng thông tin & Tuyển sinh",
+        href: "/dashboard/admin/cong-thong-tin",
+        icon: FileText,
+      },
+      {
+        name: "Quản lý Khoa",
+        href: "/dashboard/admin/khoa",
+        icon: Database,
+      },
+      {
+        name: "Ngành đào tạo",
+        href: "/dashboard/admin/nganh-dao-tao",
+        icon: GraduationCap,
+      },
+      {
         name: "Cấu hình tham số",
         href: "/dashboard/admin/cau-hinh",
         icon: Sliders,
+      },
+      {
+        name: "Lớp & Tài khoản học viên",
+        href: "/dashboard/admin/lop-hoc-vien",
+        icon: Users,
       },
       {
         name: "Nhân sự & Phân quyền",
@@ -180,4 +188,3 @@ export default function Sidebar() {
     </aside>
   );
 }
- 

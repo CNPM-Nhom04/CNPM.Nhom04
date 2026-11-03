@@ -1,3 +1,5 @@
+import { StudentClasses1793700000000 } from "./migrations/1793700000000-StudentClasses";
+import { PublicPortal1793653200000 } from "./migrations/1793653200000-PublicPortal";
 import { Graduation1793451600000 } from "./migrations/1793451600000-Graduation";
 import { Approvals1793448000000 } from "./migrations/1793448000000-Approvals";
 import "reflect-metadata";
@@ -31,6 +33,8 @@ export default new DataSource({
     Grades1793350800000,
     Approvals1793448000000,
     Graduation1793451600000,
+    PublicPortal1793653200000,
+    StudentClasses1793700000000,
   ],
   migrationsTransactionMode: "none",
 });

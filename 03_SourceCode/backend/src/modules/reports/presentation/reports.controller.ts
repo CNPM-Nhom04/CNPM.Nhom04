@@ -23,7 +23,7 @@ import {
 } from "../application/report-query.dto";
 import { ReportsService } from "../application/reports.service";
 
-import { ReportsGuard } from "./reports.guard";
+import { ReportsGuard, ReportExportPermission } from "./reports.guard";
 import { Request } from "express";
 type ReportRequest = Request & { user: { userId: string } };
 
@@ -68,6 +68,7 @@ export class ReportsController {
   }
 
   @Get("xuat-excel")
+  @ReportExportPermission()
   @ApiOperation({ summary: "Xuất toàn bộ kết quả theo bộ lọc thành file XLSX" })
   @ApiProduces(
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -89,4 +90,3 @@ export class ReportsController {
     return new StreamableFile(buffer);
   }
 }
- 

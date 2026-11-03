@@ -45,7 +45,7 @@ export class MysqlCourseRepository extends CourseRepository {
         : {}),
     };
   }
-  async list(query: CourseQuery, actor: CourseActor) {
+  async list(query: CourseQuery, actor: CourseActor, all = false) {
     const search = query.search || "",
       status = query.status || "ALL",
       unit = query.unitId || "";
@@ -66,8 +66,11 @@ export class MysqlCourseRepository extends CourseRepository {
       search,
     ];
     const rows = await this.db.query(
-      SELECT + where + " ORDER BY c.course_code,c.id LIMIT ? OFFSET ?",
-      [...params, query.limit, (query.page - 1) * query.limit],
+      SELECT +
+        where +
+        " ORDER BY c.course_code,c.id" +
+        (all ? "" : " LIMIT ? OFFSET ?"),
+      all ? params : [...params, query.limit, (query.page - 1) * query.limit],
     );
     const [count] = await this.db.query(
       "SELECT COUNT(*) total" + BASE + where,

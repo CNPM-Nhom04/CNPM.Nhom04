@@ -31,6 +31,12 @@ export default function Header() {
         <h1 className="text-base font-semibold text-slate-800">
           Hệ thống Quản lý Đào tạo Sau Đại học
         </h1>
+        <Link
+          href="/"
+          className="mt-1 inline-block text-xs font-semibold text-emerald-700 underline"
+        >
+          ← Trang chủ
+        </Link>
         <p className="text-xs text-slate-500">
           Phân hệ Số hóa & Quản lý Chương trình đào tạo
         </p>
@@ -70,4 +76,3 @@ export default function Header() {
     </header>
   );
 }
- 

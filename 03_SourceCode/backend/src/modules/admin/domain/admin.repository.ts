@@ -1,3 +1,7 @@
+import { FacultyInput, FacultyItem, FacultyQuery } from "./faculty";
+import { MajorImportLimits, MajorImportRow } from "./major-import";
+import { MajorInput, MajorItem, MajorOptions, MajorQuery } from "./major";
+
 export const USER_ROLES = [
   "QUAN_TRI",
   "CAN_BO_DAO_TAO",
@@ -82,6 +86,38 @@ export interface AuditItem {
   diaChiIP: string;
 }
 export abstract class AdminRepository {
+  abstract listFaculties(query: FacultyQuery): Promise<PageResult<FacultyItem>>;
+  abstract saveFaculty(
+    id: string | null,
+    input: FacultyInput,
+    actor: Actor,
+    expectedUpdatedAt?: string,
+  ): Promise<FacultyItem>;
+  abstract deleteFaculty(
+    id: string,
+    expectedUpdatedAt: string,
+    actor: Actor,
+  ): Promise<void>;
+  abstract majorImportLimits(): Promise<MajorImportLimits>;
+  abstract checkMajorImport(rows: MajorImportRow[]): Promise<MajorImportRow[]>;
+  abstract commitMajorImport(
+    rows: MajorImportRow[],
+    actor: Actor,
+  ): Promise<{ created: number }>;
+  abstract listMajors(query: MajorQuery): Promise<PageResult<MajorItem>>;
+  abstract majorOptions(): Promise<MajorOptions>;
+  abstract majorDetail(id: string): Promise<MajorItem>;
+  abstract saveMajor(
+    id: string | null,
+    input: MajorInput,
+    actor: Actor,
+    expectedUpdatedAt?: string,
+  ): Promise<MajorItem>;
+  abstract deleteMajor(
+    id: string,
+    expectedUpdatedAt: string,
+    actor: Actor,
+  ): Promise<void>;
   abstract listUsers(query: ListQuery): Promise<PageResult<UserItem>>;
   abstract userOptions(): Promise<{ units: { id: string; name: string }[] }>;
   abstract createUser(
@@ -110,4 +146,3 @@ export abstract class AdminRepository {
     all?: boolean,
   ): Promise<PageResult<AuditItem>>;
 }
- 

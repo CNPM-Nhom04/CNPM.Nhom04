@@ -1,3 +1,6 @@
+import { StudentAccountsModule } from "./modules/student-accounts/student-accounts.module";
+import { StudentProgramModule } from "./modules/student-program/student-program.module";
+import { PublicPortalModule } from "./modules/public-portal/public-portal.module";
 import { GraduationModule } from "./modules/graduation/graduation.module";
 import { ApprovalModule } from "./modules/approvals/approval.module";
 import { ComparisonModule } from "./modules/comparisons/comparison.module";
@@ -16,6 +19,9 @@ import { AdminModule } from "./modules/admin/admin.module";
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    PublicPortalModule,
+    StudentProgramModule,
+    StudentAccountsModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

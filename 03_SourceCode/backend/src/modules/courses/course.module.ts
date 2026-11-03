@@ -1,3 +1,4 @@
+import { CourseExportService } from "./application/course-export.service";
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module";
 import { CourseRepository } from "./domain/course";
@@ -9,6 +10,7 @@ import { CourseGuard } from "./presentation/course.guard";
   imports: [IdentityModule],
   controllers: [CourseController],
   providers: [
+    CourseExportService,
     CourseService,
     CourseGuard,
     { provide: CourseRepository, useClass: MysqlCourseRepository },

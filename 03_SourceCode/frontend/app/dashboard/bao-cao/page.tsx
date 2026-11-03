@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/services/reportService";
 
 export default function BaoCaoPage() {
+  const canExport = !!useSessionUser()?.permissions.includes("PROGRAM_EXPORT");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDegree, setSelectedDegree] = useState("ALL");
   const [page, setPage] = useState(1);
@@ -118,6 +120,7 @@ export default function BaoCaoPage() {
   }
 
   async function handleExportExcel() {
+    if (!canExport) return;
     setExporting(true);
     setActionError("");
     try {
@@ -227,7 +230,8 @@ export default function BaoCaoPage() {
           <Button
             onClick={handleExportExcel}
             isLoading={exporting}
-            disabled={loading || !!error || !report?.meta.total || printing}
+            disabled={!canExport || loading || !!error || !report?.meta.total || printing}
+            title={!canExport ? "Cần quyền PROGRAM_EXPORT để xuất Excel" : undefined}
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium cursor-pointer"
           >
             <Download className="h-4 w-4 mr-1.5" />

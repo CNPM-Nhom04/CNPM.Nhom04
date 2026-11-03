@@ -37,6 +37,28 @@ describe("AdminGuard", () => {
       );
     }
   });
+  it("requires MASTERDATA_MANAGE for the majors route", async () => {
+    const req = {
+      user: { userId: "1", username: "admin" },
+      path: "/admin/nganh-dao-tao/options",
+    };
+    const ctx = {
+      switchToHttp: () => ({ getRequest: () => req }),
+    } as unknown as ExecutionContext;
+    query.mockResolvedValue([
+      {
+        username: "admin",
+        account_status: "ACTIVE",
+        deleted_at: null,
+        isAdmin: 1,
+        hasPermission: 0,
+      },
+    ]);
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(query.mock.calls.at(-1)[1]).toEqual(["MASTERDATA_MANAGE", "1"]);
+  });
   it("uses the database username for the audit actor", async () => {
     query.mockResolvedValue([
       {
@@ -51,4 +73,3 @@ describe("AdminGuard", () => {
     expect(request.user.username).toBe("actual-admin");
   });
 });
- 
