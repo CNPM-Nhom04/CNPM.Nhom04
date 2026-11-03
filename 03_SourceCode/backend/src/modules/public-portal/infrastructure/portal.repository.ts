@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { DataSource, EntityManager } from "typeorm";
@@ -17,10 +18,10 @@ import {
 const PROGRAM_FROM = ` FROM program_versions v JOIN training_programs p ON p.id=v.program_id
  JOIN majors m ON m.id=p.major_id JOIN organizational_units u ON u.id=p.managing_unit_id
  JOIN education_levels e ON e.id=p.education_level_id LEFT JOIN program_ui_details d ON d.program_version_id=v.id`;
-const PUBLIC_PROGRAM = `v.status='PUBLISHED' AND p.status='ACTIVE' AND m.status='ACTIVE' AND u.status='ACTIVE' AND e.status='ACTIVE'`;
+const PUBLIC_PROGRAM = `v.status='PUBLISHED' AND p.status='ACTIVE' AND m.status='ACTIVE' AND u.status='ACTIVE' AND e.status='ACTIVE' AND e.level_code IN('MASTER','DOCTOR','PHD')`;
 const PROGRAM_SELECT =
   `SELECT CAST(v.id AS CHAR) id,p.program_code code,v.version_code versionCode,v.program_name_snapshot name,
- v.cohort_year cohortYear,e.level_name levelName,CAST(e.id AS CHAR) levelId,m.major_name majorName,u.unit_name unitName,
+ v.cohort_year cohortYear,e.level_code levelCode,e.level_name levelName,CAST(e.id AS CHAR) levelId,m.major_name majorName,u.unit_name unitName,
  d.study_form studyForm,d.duration_label duration, d.description description,
  DATE_FORMAT(v.effective_from,'%Y-%m-%d') effectiveFrom,DATE_FORMAT(v.effective_to,'%Y-%m-%d') effectiveTo,
  d.decision_number decisionNumber,DATE_FORMAT(d.decision_date,'%Y-%m-%d') decisionDate` +
@@ -52,32 +53,88 @@ export class MysqlPortalRepository extends PortalRepository {
     );
     return { levels, majors };
   }
-  async programs(q: PortalQuery) {
-    const search = q.search || "",
-      level = q.levelId || "";
-    const where = ` WHERE ${PUBLIC_PROGRAM} AND (?='' OR p.education_level_id=?) AND (?='' OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,p.program_code)>0 OR LOCATE(?,m.major_name)>0)`;
-    const params = [level, level, search, search, search, search];
-    const data = await this.db.query(
-      PROGRAM_SELECT +
-        where +
-        " ORDER BY v.cohort_year DESC,v.id DESC LIMIT ? OFFSET ?",
-      [...params, q.limit, (q.page - 1) * q.limit],
+  private async viewer(manager: EntityManager, viewerId?: string) {
+    if (!viewerId)
+      return { mode: "PUBLIC", facultyId: null, facultyName: null };
+    const [user] = await manager.query(
+      `SELECT u.account_status,u.deleted_at,
+      COALESCE(u.organizational_unit_id,(SELECT s.organizational_unit_id FROM students s WHERE s.user_id=u.id)) unitId,
+      EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.role_code='ADMIN' AND r.status='ACTIVE') isAdmin
+      FROM users u WHERE u.id=?`,
+      [viewerId],
     );
-    const [count] = await this.db.query(
-      "SELECT COUNT(*) total" + PROGRAM_FROM + where,
-      params,
-    );
-    return page(data, Number(count.total), q);
+    if (!user || user.account_status !== "ACTIVE" || user.deleted_at)
+      throw new UnauthorizedException("Tài khoản không còn hoạt động.");
+    if (!user.unitId && Number(user.isAdmin))
+      return { mode: "ADMIN_ALL", facultyId: null, facultyName: null };
+    const [faculty] = user.unitId
+      ? await manager.query(
+          `SELECT CAST(f.id AS CHAR) id,f.unit_name name FROM organizational_unit_closure oc
+      JOIN organizational_units f ON f.id=oc.ancestor_id WHERE oc.descendant_id=? AND f.unit_type='FACULTY' AND f.status='ACTIVE'
+      ORDER BY oc.depth,f.id LIMIT 1`,
+          [user.unitId],
+        )
+      : [];
+    return faculty
+      ? { mode: "FACULTY", facultyId: faculty.id, facultyName: faculty.name }
+      : { mode: "UNASSIGNED", facultyId: null, facultyName: null };
   }
-  program(id: string) {
+  private facultyFilter(view: { mode: string; facultyId: string | null }) {
+    if (view.mode === "UNASSIGNED")
+      return { sql: " AND 1=0", params: [] as string[] };
+    if (view.mode === "FACULTY")
+      return {
+        sql: " AND EXISTS(SELECT 1 FROM organizational_unit_closure fc WHERE fc.ancestor_id=? AND fc.descendant_id=p.managing_unit_id)",
+        params: [view.facultyId!],
+      };
+    return { sql: "", params: [] as string[] };
+  }
+  async programs(q: PortalQuery, viewerId?: string) {
     return this.db.transaction("REPEATABLE READ", async (manager) => {
+      const view = await this.viewer(manager, viewerId),
+        scope = this.facultyFilter(view);
+      const search = q.search || "",
+        level = q.levelId || "",
+        code = q.levelCode || "";
+      const where = ` WHERE ${PUBLIC_PROGRAM} ${scope.sql} AND (?='' OR p.education_level_id=?)
+        AND (?='' OR (?='MASTER' AND e.level_code='MASTER') OR (?='DOCTOR' AND e.level_code IN('DOCTOR','PHD')))
+        AND (?='' OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,p.program_code)>0 OR LOCATE(?,m.major_name)>0)`;
+      const params = [
+        ...scope.params,
+        level,
+        level,
+        code,
+        code,
+        code,
+        search,
+        search,
+        search,
+        search,
+      ];
+      const data = await manager.query(
+        PROGRAM_SELECT +
+          where +
+          " ORDER BY v.cohort_year DESC,v.id DESC LIMIT ? OFFSET ?",
+        [...params, q.limit, (q.page - 1) * q.limit],
+      );
+      const [count] = await manager.query(
+        "SELECT COUNT(*) total" + PROGRAM_FROM + where,
+        params,
+      );
+      return { ...page(data, Number(count.total), q), view };
+    });
+  }
+  program(id: string, viewerId?: string) {
+    return this.db.transaction("REPEATABLE READ", async (manager) => {
+      const view = await this.viewer(manager, viewerId),
+        scope = this.facultyFilter(view);
       const [item] = await manager.query(
-        PROGRAM_SELECT + ` WHERE v.id=? AND ${PUBLIC_PROGRAM}`,
-        [id],
+        PROGRAM_SELECT + ` WHERE v.id=? AND ${PUBLIC_PROGRAM}` + scope.sql,
+        [id, ...scope.params],
       );
       if (!item)
         throw new NotFoundException(
-          "Chương trình chưa được công bố hoặc không còn hiển thị công khai.",
+          "Chương trình chưa công bố hoặc không thuộc khoa của tài khoản.",
         );
       const tracks = await manager.query(
         "SELECT CAST(id AS CHAR) id,track_code_snapshot code,track_name_snapshot name,required_total_credits credits FROM program_version_tracks WHERE program_version_id=? AND status='ACTIVE' ORDER BY id",
@@ -96,7 +153,7 @@ export class MysqlPortalRepository extends PortalRepository {
           [track.id],
         );
       }
-      return { ...item, tracks };
+      return { ...item, tracks, view };
     });
   }
   async documents(q: PortalQuery, admin = false) {

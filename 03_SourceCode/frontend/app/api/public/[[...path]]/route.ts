@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl } from "@/lib/server/backend";
+import { AUTH_COOKIE, backendUrl } from "@/lib/server/backend";
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
@@ -66,7 +66,16 @@ async function proxy(
       {
         method: request.method,
         body,
-        headers: body ? { "Content-Type": "application/json" } : {},
+        headers: {
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(path.startsWith("chuong-trinh-dao-tao") &&
+          request.cookies.get(AUTH_COOKIE)?.value
+            ? {
+                Authorization:
+                  "Bearer " + request.cookies.get(AUTH_COOKIE)!.value,
+              }
+            : {}),
+        },
         cache: "no-store",
         signal: AbortSignal.timeout(15000),
       },
@@ -83,7 +92,8 @@ async function proxy(
       status: response.status,
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": "no-store",
+        "Cache-Control": "private, no-store",
+        Vary: "Cookie",
       },
     });
   } catch {

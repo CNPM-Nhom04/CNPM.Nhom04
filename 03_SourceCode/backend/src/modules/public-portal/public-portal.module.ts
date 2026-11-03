@@ -8,6 +8,7 @@ import {
   PortalController,
   PortalAdminController,
 } from "./presentation/portal.controller";
+import { OptionalPortalAuthGuard } from "./presentation/optional-portal-auth.guard";
 import { SubscriptionRateGuard } from "./presentation/subscription-rate.guard";
 @Module({
   imports: [IdentityModule],
@@ -16,6 +17,7 @@ import { SubscriptionRateGuard } from "./presentation/subscription-rate.guard";
     PortalService,
     AdminGuard,
     SubscriptionRateGuard,
+    OptionalPortalAuthGuard,
     { provide: PortalRepository, useClass: MysqlPortalRepository },
   ],
 })

@@ -56,7 +56,11 @@
     "test:access-matrix-integration": "node test/access-matrix.integration.cjs",
     "test:access-matrix-browser": "node test/access-matrix.browser.cjs",
     "test:student-account-link-integration": "node test/student-account-link.integration.cjs",
-    "test:student-account-link-browser": "node test/student-account-link.browser.cjs"
+    "test:student-account-link-browser": "node test/student-account-link.browser.cjs",
+    "test:program-course-forms-integration": "node test/program-course-forms.integration.cjs",
+    "test:program-course-forms-browser": "node test/program-course-forms.browser.cjs",
+    "test:public-catalog-integration": "node test/public-catalog.integration.cjs",
+    "test:public-catalog-browser": "node test/public-catalog.browser.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

@@ -14,8 +14,8 @@ export default function Programs() {
               Chương trình đào tạo
             </h1>
             <p className="mt-4 text-sm leading-7 text-slate-600">
-              Khám phá chương trình đã ban hành, xem cấu trúc học phần theo từng
-              phiên bản và hướng đào tạo.
+              Tra cứu chương trình Thạc sĩ và Tiến sĩ đã ban hành, xem thông tin
+              ngành, khoa quản lý và khung học phần của từng phiên bản.
             </p>
           </div>
         </section>

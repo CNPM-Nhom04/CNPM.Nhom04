@@ -104,3 +104,5 @@ Admin nhập tài khoản học viên theo lớp tại `/dashboard/admin/lop-hoc
 Ma trận quyền và các chức năng chưa triển khai: [Đối chiếu phân quyền](../../docs/ACCESS_REVIEW.md). Xuất Excel báo cáo/so sánh cần `PROGRAM_EXPORT` ngoài quyền xem chức năng; Admin hiện không được cấp quyền xuất này trong SQL.
 
 Trong **Lớp & Tài khoản học viên**, nút **Liên kết tài khoản** dành cho tài khoản STUDENT đã có: chọn hồ sơ từ SQL hoặc tạo hồ sơ mới theo mã học viên đã xác minh, gắn đúng lớp/CTĐT và giữ nguyên mật khẩu/quyền. Chi tiết: [Student Accounts README](../backend/src/modules/student-accounts/README.md).
+
+Danh mục công khai `/chuong-trinh-dao-tao` chia Thạc sĩ/Tiến sĩ, chỉ CTĐT đã ban hành. Khi đăng nhập lọc theo khoa SQL (bộ môn lấy khoa cha), áp dụng cả trang chi tiết và chương trình nổi bật trang chủ. `/ctdt-cua-toi` vẫn giữ phân công học viên riêng. Hướng dẫn: [Public Portal README](../backend/src/modules/public-portal/README.md).

@@ -82,3 +82,35 @@ npm run test:portal-browser
 ```
 
 Integration/browser chỉ chạy trên database bản sao `ctdt_major_review_<timestamp>` có `MAJOR_TEST_ALLOW_WRITES=1`; backend/frontend trỏ đúng bản sao và dùng JWT_SECRET riêng. Cần áp dụng migration trên bản sao, fixture `MAJOR_BROWSER_FIXTURE` do `test:major-integration` tạo. Portal integration tạo `portal.json` cạnh fixture; browser dùng file này và Playwright/Chromium (`PLAYWRIGHT_MODULE_PATH` nếu module ngoài dự án). Script từ chối database thật. Không gửi SMTP trong các bài test; toàn bộ dữ liệu thử nằm trên bản sao và được xóa sau khi kiểm tra.
+
+## Danh mục Thạc sĩ / Tiến sĩ và lọc theo khoa (03/11/2026)
+
+Trang `/chuong-trinh-dao-tao` chia hai phần Thạc sĩ/Tiến sĩ, tìm kiếm chung, phân trang riêng 8 phiên bản mỗi phần. `levelCode=MASTER` lọc Thạc sĩ; `levelCode=DOCTOR` bao gồm mã DOCTOR/PHD trong SQL. Không tạo chương trình mẫu để làm đầy giao diện. Bậc chưa có phiên bản công bố hiển thị thông báo chưa có dữ liệu.
+
+Chỉ hiển thị `program_versions.status=PUBLISHED`, cùng chương trình/ngành/khoa/bậc ACTIVE. Không trả bản nháp, hồ sơ đang duyệt, tài liệu nội bộ hoặc dữ liệu học viên. Khách xem tất cả CTĐT công khai của hai bậc, có thể xem hết qua phân trang. Đây là tra cứu công khai, không phải phân hệ xét tuyển.
+
+Khi gửi JWT hợp lệ:
+
+- Khoa lấy bằng ID SQL từ `users.organizational_unit_id`; nếu chưa gắn đơn vị nhưng có hồ sơ học viên liên kết bằng `students.user_id`, dùng đơn vị hồ sơ đó. Không đoán tên đăng nhập/email hoặc nhận khoa/userId từ query.
+- Nếu tài khoản ở bộ môn, tìm khoa cha gần nhất có `unit_type=FACULTY`, trạng thái ACTIVE qua `organizational_unit_closure`.
+- Chỉ trả chương trình có đơn vị quản lý nằm trong khoa đó. Cùng điều kiện áp dụng cho danh sách, tổng số, trang chi tiết, phần chương trình nổi bật ở trang chủ. Trang chi tiết ngoài khoa trả 404; không chỉ giấu trên frontend.
+- Tài khoản không xác định được khoa: danh sách rỗng và thông báo cần Admin liên kết đơn vị/hồ sơ. Không fallback thành toàn hệ thống.
+- Admin không gắn đơn vị có thể xem tất cả CTĐT đã công bố (`view.mode=ADMIN_ALL`). Admin gắn khoa cũng lọc theo khoa đó.
+- JWT hết hạn/sai hoặc tài khoản bị vô hiệu: 401, không coi lại là khách trong cùng yêu cầu. Cờ bắt buộc đổi mật khẩu: 403 cho đến khi đổi.
+
+Danh sách trả thêm `view` với `mode=PUBLIC/FACULTY/ADMIN_ALL/UNASSIGNED`, `facultyId`, `facultyName`. Dữ liệu chương trình có thêm `levelCode`. Không trả danh tính người đăng nhập cho khách. Next proxy và server loader chuyển JWT HttpOnly tới backend chỉ trên đường dẫn chương trình, dùng cache `private, no-store`/`Vary: Cookie` cho proxy. Không truyền JWT xuống JavaScript hoặc lưu trong localStorage.
+
+`/ctdt-cua-toi` vẫn dùng phân công ACTIVE chính xác của học viên, không đổi sang danh mục theo khoa và không tự chuyển phiên bản. Các quyền dashboard/ghi/xét duyệt giữ nguyên. Bộ lọc khoa tại đây dành cho trải nghiệm danh mục công khai sau đăng nhập, không cấp thêm quyền PROGRAM_READ/PROGRAM_EDIT cho học viên hoặc giảng viên.
+
+### Test tay
+
+1. Chưa đăng nhập, mở `/chuong-trinh-dao-tao`: thấy hai phần Thạc sĩ/Tiến sĩ và tất cả phiên bản đã công bố; tìm mã/ngành, chuyển từng trang riêng.
+2. Đăng nhập tài khoản khoa CNTT: danh sách chỉ có CTĐT công bố thuộc CNTT. Đăng nhập tài khoản khoa Kinh tế: chỉ có dữ liệu công bố thuộc Kinh tế; nếu chưa có dữ liệu phải hiển thị rỗng.
+3. Giảng viên thuộc bộ môn Hệ thống thông tin lấy khoa cha CNTT. Admin không gắn khoa thấy tất cả CTĐT công bố.
+4. Mở link ID CTĐT khác khoa khi đã đăng nhập: không hiển thị dữ liệu. Đăng xuất: tra cứu công khai vẫn xem được nếu phiên bản đã ban hành.
+5. Tài khoản chưa gắn khoa/hồ sơ: thông báo đúng, không hiện lẫn dữ liệu khác. Bản nháp/đang duyệt luôn không xuất hiện kể cả Admin ở trang công khai.
+6. Đối chiếu DBeaver: `education_levels`, `program_versions`, `training_programs.managing_unit_id`, `users.organizational_unit_id`, `organizational_units` và `organizational_unit_closure`; với học viên kiểm tra thêm `students.user_id`.
+
+Kiểm thử: `test:public-catalog-integration` và `test:public-catalog-browser` chỉ chạy trên SQL clone `ctdt_major_review_<chuso>`, bật `MAJOR_TEST_ALLOW_WRITES=1`, backend/frontend test cùng clone và JWT_SECRET. `MAJOR_TEST_URL` mặc định http://localhost:3101, backend test http://127.0.0.1:3102. Bài integration tạo dữ liệu công bố tổng hợp chỉ trong clone, lưu `catalog.json` cạnh `MAJOR_BROWSER_FIXTURE` (mặc định `/tmp`); browser dùng Playwright/Chromium và `PLAYWRIGHT_MODULE_PATH` nếu cài ngoài repo. Xóa clone và fixture chứa token sau test. Không chạy script tạo fixture trên database thật.
+
+Trang tham khảo `https://pgd.agu.edu.vn/trainings/majors` trả 403 khi kiểm tra từ môi trường thực hiện; giao diện áp dụng bố cục danh mục hai bậc và nhận diện xanh đang có trong dự án, không tuyên bố sao chép chính xác trang nguồn.

@@ -21,6 +21,21 @@ describe("CourseService protects SQL date ranges and IDs", () => {
     ).toThrow(BadRequestException);
     expect(create).not.toHaveBeenCalled();
   });
+  it("rejects equal effective dates", () => {
+    expect(() =>
+      service.create({ ...input, effectiveTo: input.effectiveFrom }, actor),
+    ).toThrow("Ngày kết thúc hiệu lực phải lớn hơn ngày bắt đầu hiệu lực.");
+    expect(create).not.toHaveBeenCalled();
+  });
+  it.each([0, 0.5, 1.5, 16, 200])(
+    "rejects invalid credit count %s before writes",
+    (credits) => {
+      expect(() => service.create({ ...input, credits }, actor)).toThrow(
+        "Số tín chỉ phải là số nguyên từ 1 đến 15.",
+      );
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
   it("rejects dates outside MariaDB DATE's supported year range", () => {
     expect(() =>
       service.create({ ...input, effectiveFrom: "0999-12-31" }, actor),
