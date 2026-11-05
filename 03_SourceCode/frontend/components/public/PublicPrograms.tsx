@@ -141,7 +141,8 @@ function DegreePrograms({
               </span>
               <div className="min-w-0">
                 <p className="mb-2 text-xs font-semibold tracking-wide text-emerald-700">
-                  {program.code} · {program.versionCode}
+                  {program.sourceMajorCode || program.code} ·{" "}
+                  {program.versionCode}
                 </p>
                 <h3 className="text-lg font-bold leading-7 text-slate-900">
                   <Link
@@ -159,7 +160,11 @@ function DegreePrograms({
                   {program.unitName}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
-                  <span>Khóa {program.cohortYear}</span>
+                  <span>
+                    {program.cohortYear
+                      ? `Khóa ${program.cohortYear}`
+                      : "Chưa công bố niên khóa"}
+                  </span>
                   {program.duration && (
                     <span>Thời gian: {program.duration}</span>
                   )}

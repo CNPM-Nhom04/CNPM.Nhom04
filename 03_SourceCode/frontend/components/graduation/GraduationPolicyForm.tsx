@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   graduationService,
@@ -114,7 +115,11 @@ export function GraduationPolicyForm({
               ngoại ngữ hoặc yêu cầu bảo vệ.
             </p>
           )}
-          <form onSubmit={save}>
+          <ExcelOnlyForm
+            recordLabel={`${data.track.programCode} / ${data.track.versionCode} / ${data.track.code}`}
+            recordKey={id}
+            onSubmit={save}
+          >
             <fieldset
               disabled={busy || !data.permissions.canPolicy}
               className="grid gap-4 md:grid-cols-2"
@@ -213,7 +218,7 @@ export function GraduationPolicyForm({
                 </button>
               )}
             </fieldset>
-          </form>
+          </ExcelOnlyForm>
         </>
       )}
     </section>

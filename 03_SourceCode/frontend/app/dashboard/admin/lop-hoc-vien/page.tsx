@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
@@ -392,7 +393,17 @@ export default function StudentClassesPage() {
           </>
         }
       >
-        <form id="student-class" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="student-classes"
+          onImported={() => {
+            setOpen(false);
+            refresh();
+          }}
+          recordKey={String(editing?.id || "new")}
+          id="student-class"
+          onSubmit={save}
+          className="space-y-4"
+        >
           <AdminFeedback error={formError} />
           <label className="block space-y-2 text-sm font-medium">
             Mã lớp
@@ -491,7 +502,7 @@ export default function StudentClassesPage() {
               </select>
             </label>
           )}
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

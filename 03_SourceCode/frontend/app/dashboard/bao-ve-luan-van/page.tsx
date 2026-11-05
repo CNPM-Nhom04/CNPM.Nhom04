@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -558,7 +559,16 @@ export default function BaoVeLuanVanPage() {
           </>
         }
       >
-        <form id="baove-form" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="defenses"
+          onImported={() => {
+            setIsAddModalOpen(false);
+            refresh();
+          }}
+          id="baove-form"
+          onSubmit={save}
+          className="space-y-4"
+        >
           <Feedback error={modalError || policyError} />
           <Feedback
             error={studentsError}
@@ -797,7 +807,7 @@ export default function BaoVeLuanVanPage() {
               </label>
             </div>
           </fieldset>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
       <Modal
         isOpen={isDetailModalOpen}
@@ -893,7 +903,16 @@ export default function BaoVeLuanVanPage() {
               {selectedItem.trangThai === "CHO_BAO_VE" &&
                 (selectedItem.permissions?.canSchedule ??
                   permissions?.canSchedule) && (
-                  <form onSubmit={cancel} className="space-y-2 border-t pt-4">
+                  <ExcelOnlyForm
+                    recordLabel={
+                      selectedItem
+                        ? `${selectedItem.maHocVien} — ${selectedItem.tenDeTai}`
+                        : undefined
+                    }
+                    recordKey={selectedItem?.id + ":cancel"}
+                    onSubmit={cancel}
+                    className="space-y-2 border-t pt-4"
+                  >
                     <label htmlFor="cancel-reason" className="font-semibold">
                       Lý do hủy lịch (tối thiểu 10 ký tự)
                     </label>
@@ -909,13 +928,19 @@ export default function BaoVeLuanVanPage() {
                     <Button type="submit" variant="outline" disabled={saving}>
                       Hủy lịch bảo vệ
                     </Button>
-                  </form>
+                  </ExcelOnlyForm>
                 )}
 
               {selectedItem.trangThai === "CHO_BAO_VE" &&
                 (selectedItem.permissions?.canRecord ??
                   permissions?.canRecord) && (
-                  <form
+                  <ExcelOnlyForm
+                    recordLabel={
+                      selectedItem
+                        ? `${selectedItem.maHocVien} — ${selectedItem.tenDeTai}`
+                        : undefined
+                    }
+                    recordKey={selectedItem?.id}
                     onSubmit={saveResult}
                     className="space-y-3 border-t border-slate-200 pt-4"
                   >
@@ -952,7 +977,7 @@ export default function BaoVeLuanVanPage() {
                     >
                       Lưu Kết Quả Bảo Vệ
                     </Button>
-                  </form>
+                  </ExcelOnlyForm>
                 )}
             </>
           )}

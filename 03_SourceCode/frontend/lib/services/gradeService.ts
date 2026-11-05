@@ -75,6 +75,7 @@ export interface GradeItem {
   passedDate: string | null;
   createdAt: string;
   registrationId: string | null;
+  registrationStatus?: string | null;
   state: GradeState;
   attendanceScore: number | null;
   midtermScore: number | null;
@@ -94,6 +95,10 @@ export interface GradeList extends Page<GradeItem> {
   permissions: { canManage: boolean };
 }
 export interface GradeDetail extends GradeItem {
+  availableActions?: Record<
+    "chot" | "huy" | "mo-lai",
+    { allowed: boolean; reason: string }
+  >;
   permissions: { canManage: boolean };
   history: {
     revision: number;

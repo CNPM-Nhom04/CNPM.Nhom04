@@ -52,12 +52,13 @@ export class ReportsService {
       { header: "Định mức tín chỉ", key: "tongTinChi", width: 20 },
       { header: "Sĩ số học viên", key: "soHocVien", width: 20 },
       { header: "Trạng thái", key: "trangThai", width: 25 },
+      { header: "Nguồn CTĐT", key: "sourceUrl", width: 65 },
     ];
     // ExcelJS writes strings as text cells, including input beginning with '='.
     sheet.addRows(rows);
     sheet.getRow(1).font = { bold: true };
     sheet.views = [{ state: "frozen", ySplit: 1 }];
-    sheet.autoFilter = "A1:G1";
+    sheet.autoFilter = "A1:H1";
     sheet.pageSetup = {
       orientation: "landscape",
       fitToPage: true,
@@ -67,4 +68,3 @@ export class ReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
- 

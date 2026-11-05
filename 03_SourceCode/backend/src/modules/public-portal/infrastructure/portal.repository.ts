@@ -17,10 +17,10 @@ import {
 } from "../domain/portal";
 const PROGRAM_FROM = ` FROM program_versions v JOIN training_programs p ON p.id=v.program_id
  JOIN majors m ON m.id=p.major_id JOIN organizational_units u ON u.id=p.managing_unit_id
- JOIN education_levels e ON e.id=p.education_level_id LEFT JOIN program_ui_details d ON d.program_version_id=v.id`;
-const PUBLIC_PROGRAM = `v.status='PUBLISHED' AND p.status='ACTIVE' AND m.status='ACTIVE' AND u.status='ACTIVE' AND e.status='ACTIVE' AND e.level_code IN('MASTER','DOCTOR','PHD')`;
+ JOIN education_levels e ON e.id=p.education_level_id LEFT JOIN program_ui_details d ON d.program_version_id=v.id LEFT JOIN program_version_sources src ON src.program_version_id=v.id LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id`;
+const PUBLIC_PROGRAM = `(v.status='PUBLISHED' OR src.program_version_id IS NOT NULL) AND p.deleted_at IS NULL AND p.status='ACTIVE' AND m.status='ACTIVE' AND u.status='ACTIVE' AND e.status='ACTIVE' AND e.level_code IN('MASTER','DOCTOR','PHD')`;
 const PROGRAM_SELECT =
-  `SELECT CAST(v.id AS CHAR) id,p.program_code code,v.version_code versionCode,v.program_name_snapshot name,
+  `SELECT src.source_url sourceUrl,src.document_url sourceDocumentUrl,src.total_credits sourceTotalCredits,cs.original_major_code sourceMajorCode,CAST(v.id AS CHAR) id,p.program_code code,v.version_code versionCode,v.program_name_snapshot name,
  v.cohort_year cohortYear,e.level_code levelCode,e.level_name levelName,CAST(e.id AS CHAR) levelId,m.major_name majorName,u.unit_name unitName,
  d.study_form studyForm,d.duration_label duration, d.description description,
  DATE_FORMAT(v.effective_from,'%Y-%m-%d') effectiveFrom,DATE_FORMAT(v.effective_to,'%Y-%m-%d') effectiveTo,
@@ -84,7 +84,7 @@ export class MysqlPortalRepository extends PortalRepository {
       return { sql: " AND 1=0", params: [] as string[] };
     if (view.mode === "FACULTY")
       return {
-        sql: " AND EXISTS(SELECT 1 FROM organizational_unit_closure fc WHERE fc.ancestor_id=? AND fc.descendant_id=p.managing_unit_id)",
+        sql: " AND (src.program_version_id IS NOT NULL OR EXISTS(SELECT 1 FROM organizational_unit_closure fc WHERE fc.ancestor_id=? AND fc.descendant_id=p.managing_unit_id))",
         params: [view.facultyId!],
       };
     return { sql: "", params: [] as string[] };

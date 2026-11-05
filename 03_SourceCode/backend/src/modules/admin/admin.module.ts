@@ -1,3 +1,4 @@
+import { CategoryExcelService } from "./application/category-excel.service";
 import { FacultyService } from "./application/faculty.service";
 import { MajorImportService } from "./application/major-import.service";
 import { Module } from "@nestjs/common";
@@ -15,6 +16,7 @@ import { AdminGuard } from "./presentation/admin.guard";
     AdminService,
     FacultyService,
     MajorImportService,
+    CategoryExcelService,
     AdminGuard,
     { provide: AdminRepository, useClass: MysqlAdminRepository },
   ],

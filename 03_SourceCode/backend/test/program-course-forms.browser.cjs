@@ -93,8 +93,8 @@ async function run() {
     );
     await lang.selectOption("B1");
     await p
-      .getByLabel("Bằng CNTT (yêu cầu đầu ra)", { exact: true })
-      .fill("Bằng CNTT");
+      .getByLabel("Chuẩn CNTT (yêu cầu đầu ra)", { exact: true })
+      .selectOption("Bằng CNTT");
     const update = p.waitForResponse(
       (r) =>
         r.request().method() === "PUT" &&

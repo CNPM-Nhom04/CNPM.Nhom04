@@ -14,6 +14,14 @@ describe("AdminService", () => {
     repository = {
       createUser: jest.fn().mockResolvedValue({ id: "10" }),
       saveSettings: jest.fn(),
+      getSettingsOptions: jest
+        .fn()
+        .mockResolvedValue({
+          languageRequirements: [
+            SETTING_DEFAULTS.ngoaiNguBatBuocThacSi,
+            SETTING_DEFAULTS.ngoaiNguBatBuocTienSi,
+          ],
+        }),
       listAudit: jest.fn(),
     };
     service = new AdminService(
@@ -22,6 +30,29 @@ describe("AdminService", () => {
         policy: jest.fn().mockResolvedValue({ passwordMinLength: 10 }),
       } as unknown as AuthSecurityRepository,
     );
+  });
+  it("accepts configured language choices and a registration duration in days", async () => {
+    const settings = { ...SETTING_DEFAULTS, thoiHanDangKyToiDa: "15" };
+    await service.saveSettings(settings, actor);
+    expect(repository.saveSettings).toHaveBeenCalledWith(settings, actor);
+  });
+  it("rejects free text outside the current language choices", async () => {
+    await expect(
+      service.saveSettings(
+        { ...SETTING_DEFAULTS, ngoaiNguBatBuocThacSi: "Gia tri tu nhap sai" },
+        actor,
+      ),
+    ).rejects.toThrow("chọn giá trị trong danh sách");
+    expect(repository.saveSettings).not.toHaveBeenCalled();
+  });
+  it("names the day unit when the registration duration is out of range", () => {
+    expect(() =>
+      service.saveSettings(
+        { ...SETTING_DEFAULTS, thoiHanDangKyToiDa: "366" },
+        actor,
+      ),
+    ).toThrow("365 ngày");
+    expect(repository.saveSettings).not.toHaveBeenCalled();
   });
   it("hashes the password and keeps credentials out of the public profile", async () => {
     await service.createUser(
@@ -101,4 +132,3 @@ describe("AdminService", () => {
     expect(workbook.worksheets[0].getCell("E2").value).toBe("Thêm tài khoản");
   });
 });
- 

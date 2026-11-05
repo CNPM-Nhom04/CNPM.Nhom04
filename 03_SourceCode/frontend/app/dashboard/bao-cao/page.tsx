@@ -230,8 +230,10 @@ export default function BaoCaoPage() {
           <Button
             onClick={handleExportExcel}
             isLoading={exporting}
-            disabled={!canExport || loading || !!error || !report?.meta.total || printing}
-            title={!canExport ? "Cần quyền PROGRAM_EXPORT để xuất Excel" : undefined}
+            disabled={!canExport || loading || !!error || !report || printing}
+            title={
+              !canExport ? "Tài khoản chưa được cấp quyền xuất báo cáo Excel" : undefined
+            }
             className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium cursor-pointer"
           >
             <Download className="h-4 w-4 mr-1.5" />
@@ -240,6 +242,26 @@ export default function BaoCaoPage() {
         </div>
       </div>
 
+      {!canExport && (
+        <p
+          role="status"
+          data-report-controls
+          className="text-sm text-amber-800"
+        >
+          Tài khoản chưa có quyền xuất Excel. Bạn vẫn có thể
+          xem và in báo cáo theo quyền được cấp.
+        </p>
+      )}
+      {canExport && !loading && !error && report?.meta.total === 0 && (
+        <p
+          role="status"
+          data-report-controls
+          className="text-sm text-slate-600"
+        >
+          Không có CTĐT khớp bộ lọc. Bạn vẫn có thể xuất file Excel có tiêu đề
+          cột hoặc đổi bộ lọc để lấy dữ liệu.
+        </p>
+      )}
       {/* 2. Thẻ thống kê nhanh */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
@@ -393,7 +415,9 @@ export default function BaoCaoPage() {
                       {item.khoaQuanLy}
                     </td>
                     <td className="px-5 py-4 text-center font-bold text-blue-600">
-                      {item.tongTinChi} TC
+                      {item.tongTinChi == null
+                        ? "Chưa có thông tin"
+                        : `${item.tongTinChi} TC`}
                     </td>
                     <td className="px-5 py-4 text-center font-semibold text-slate-800">
                       {item.soHocVien} HV
@@ -475,4 +499,3 @@ export default function BaoCaoPage() {
     </div>
   );
 }
- 

@@ -1,4 +1,5 @@
 "use client";
+import { CategoryExcelModal } from "@/components/admin/CategoryExcelModal";
 
 import { useState } from "react";
 import { adminRequest, type MasterItem } from "@/lib/services/adminService";
@@ -16,7 +17,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui";
-import { Modal } from "@/components/ui/Modal";
 
 export default function MasterDataPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,14 +36,6 @@ export default function MasterDataPage() {
   // State quản lý Modal và Thêm/Sửa
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MasterItem | null>(null);
-  const [formData, setFormData] = useState({
-    maDanhMuc: "",
-    tenDanhMuc: "",
-    loaiDanhMuc: "KHOA_QUAN_LY" as MasterItem["loaiDanhMuc"],
-    moTa: "",
-    trangThai: true,
-  });
-
   const getCategoryLabel = (type: MasterItem["loaiDanhMuc"]) => {
     switch (type) {
       case "KHOA_QUAN_LY":
@@ -94,56 +86,14 @@ export default function MasterDataPage() {
     setEditingItem(null);
     setMutationError(null);
     setMessage("");
-    setFormData({
-      maDanhMuc: "",
-      tenDanhMuc: "",
-      loaiDanhMuc: "KHOA_QUAN_LY",
-      moTa: "",
-      trangThai: true,
-    });
     setIsModalOpen(true);
   };
   const handleOpenEdit = (item: MasterItem) => {
     setEditingItem(item);
     setMutationError(null);
     setMessage("");
-    setFormData({
-      maDanhMuc: item.maDanhMuc,
-      tenDanhMuc: item.tenDanhMuc,
-      loaiDanhMuc: item.loaiDanhMuc,
-      moTa: item.moTa,
-      trangThai: item.trangThai,
-    });
     setIsModalOpen(true);
   };
-  const handleSaveCategory = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (saving) return;
-    setSaving(true);
-    setMutationError(null);
-    setMessage("");
-    try {
-      await adminRequest(
-        editingItem
-          ? "master-data/" + encodeURIComponent(editingItem.id)
-          : "master-data",
-        {
-          method: editingItem ? "PUT" : "POST",
-          body: JSON.stringify(formData),
-        },
-      );
-      setMessage(editingItem ? "Đã cập nhật danh mục." : "Đã thêm danh mục.");
-      setIsModalOpen(false);
-      list.refresh();
-    } catch (reason) {
-      setMutationError(
-        reason instanceof Error ? reason : new Error("Không thể lưu danh mục."),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="space-y-6 pb-16">
       <AdminFeedback
@@ -168,7 +118,7 @@ export default function MasterDataPage() {
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
         >
           <Plus className="h-4 w-4 mr-1.5" />
-          Thêm Danh Mục Mới
+          Nhập / sửa danh mục Excel
         </Button>
       </div>
 
@@ -221,7 +171,7 @@ export default function MasterDataPage() {
                     <td className="px-5 py-4 font-bold text-blue-600 truncate">
                       {item.maDanhMuc}
                     </td>
-                    <td className="px-5 py-4 font-semibold text-slate-900 truncate">
+                    <td className="px-5 py-4 font-semibold text-slate-900 whitespace-normal break-words">
                       {item.tenDanhMuc}
                     </td>
                     <td className="px-5 py-4 text-center">
@@ -231,7 +181,9 @@ export default function MasterDataPage() {
                       {item.moTa}
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${item.trangThai ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                      >
                         <CheckCircle2 className="h-3 w-3" />{" "}
                         {item.trangThai ? "Hoạt động" : "Ngừng hoạt động"}
                       </span>
@@ -241,7 +193,7 @@ export default function MasterDataPage() {
                         <button
                           disabled={saving}
                           onClick={() => handleOpenEdit(item)}
-                          title="Chỉnh sửa danh mục"
+                          title="Sửa danh mục bằng Excel"
                           className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                         >
                           <Edit3 className="h-4 w-4" />
@@ -283,125 +235,18 @@ export default function MasterDataPage() {
         loading={list.loading || saving}
         changePage={list.changePage}
       />
-      {/* 4. Modal Thêm / Cập Nhật Danh Mục */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => {
-          if (!saving) setIsModalOpen(false);
-        }}
-        title={
-          editingItem
-            ? "Chỉnh Sửa Danh Mục Dùng Chung"
-            : "Thêm Danh Mục Dùng Chung Mới"
-        }
-        description="Khai báo các tham số hệ thống phục vụ quản lý đào tạo SĐH"
-        size="lg"
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving}
-              onClick={() => setIsModalOpen(false)}
-            >
-              Hủy bỏ
-            </Button>
-            <Button
-              type="submit"
-              form="master-form"
-              isLoading={saving}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium cursor-pointer"
-            >
-              {editingItem ? "Cập Nhật Danh Mục" : "Lưu Danh Mục"}
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="master-form"
-          onSubmit={handleSaveCategory}
-          className="space-y-4"
-        >
-          <AdminFeedback error={mutationError} />
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Mã Danh Mục
-            </label>
-            <input
-              type="text"
-              placeholder="Ví dụ: KHOA_CNTT, THAC_SI..."
-              required
-              value={formData.maDanhMuc}
-              onChange={(e) =>
-                setFormData({ ...formData, maDanhMuc: e.target.value })
-              }
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Tên Danh Mục
-            </label>
-            <input
-              type="text"
-              placeholder="Ví dụ: Khoa Công nghệ Thông tin"
-              required
-              value={formData.tenDanhMuc}
-              onChange={(e) =>
-                setFormData({ ...formData, tenDanhMuc: e.target.value })
-              }
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Phân Loại Danh Mục
-            </label>
-            <select
-              disabled={!!editingItem}
-              value={formData.loaiDanhMuc}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  loaiDanhMuc: e.target.value as MasterItem["loaiDanhMuc"],
-                })
-              }
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-            >
-              <option value="KHOA_QUAN_LY">Khoa / Đơn vị</option>
-              <option value="BAC_DAO_TAO">Bậc đào tạo</option>
-              <option value="KHOI_KIEN_THUC">Khối kiến thức</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Mô Tả Chi Tiết
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Nhập mô tả chi tiết chức năng danh mục..."
-              value={formData.moTa}
-              onChange={(e) =>
-                setFormData({ ...formData, moTa: e.target.value })
-              }
-              className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            ></textarea>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={formData.trangThai}
-              onChange={(event) =>
-                setFormData({ ...formData, trangThai: event.target.checked })
-              }
-            />
-            Danh mục hoạt động
-          </label>
-        </form>
-      </Modal>
+      {isModalOpen && (
+        <CategoryExcelModal
+          key={editingItem?.id || "new"}
+          focus={editingItem?.id}
+          onClose={() => setIsModalOpen(false)}
+          onSaved={(summary) => {
+            setMessage(summary);
+            setIsModalOpen(false);
+            list.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

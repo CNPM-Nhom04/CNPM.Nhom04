@@ -40,6 +40,9 @@ export interface AuditItem {
   moTa: string;
   diaChiIP: string;
 }
+export interface AdminSettingsOptions {
+  languageRequirements: string[];
+}
 export interface AdminSettings {
   maxTinChiHocKy: string;
   minTinChiTotNghiepThacSi: string;
@@ -101,4 +104,3 @@ export async function exportAudit(params: URLSearchParams) {
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
- 

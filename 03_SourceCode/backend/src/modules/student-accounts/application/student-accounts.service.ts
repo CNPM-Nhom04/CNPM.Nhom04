@@ -1,3 +1,4 @@
+import { addExampleSheet } from "../../../core/excel/examples";
 import {
   BadRequestException,
   Injectable,
@@ -95,6 +96,50 @@ export class StudentAccountsService {
     const book = new Workbook(),
       sheet = exportSheet(book, "Hoc vien", STUDENT_HEADERS, [24, 40, 45, 28]);
     for (let i = 1; i <= 4; i++) sheet.getColumn(i).numFmt = "@";
+    const previous = exportSheet(
+      book,
+      "Hoc vien hien co",
+      [
+        "Mã học viên",
+        "Họ tên",
+        "Email",
+        "Tên đăng nhập",
+        "Trạng thái tài khoản",
+      ],
+      [24, 40, 45, 28, 24],
+    );
+    for (let page = 1; ; page++) {
+      const result = (await this.repository.members(id, {
+        page,
+        limit: 100,
+        searchTerm: "",
+      })) as {
+        data: {
+          studentCode: string;
+          fullName: string;
+          email: string;
+          username: string;
+          accountStatus: string;
+        }[];
+        meta: { totalPages: number };
+      };
+      for (const member of result.data) {
+        sheet.addRow([
+          member.studentCode,
+          member.fullName,
+          member.email || "",
+          member.username || "",
+        ]);
+        previous.addRow([
+          member.studentCode,
+          member.fullName,
+          member.email,
+          member.username,
+          member.accountStatus,
+        ]);
+      }
+      if (page >= result.meta.totalPages) break;
+    }
     const info = exportSheet(
       book,
       "Thong tin lop",
@@ -111,7 +156,8 @@ export class StudentAccountsService {
     ].forEach((row) => info.addRow(row));
     const guide = book.addWorksheet("Huong dan");
     [
-      "Điền sheet Hoc vien, giữ nguyên bốn tiêu đề. Không nhập mật khẩu trong file.",
+      "Mẫu điền sẵn học viên hiện tại trong sheet Hoc vien. Dòng đã có tài khoản và không đổi được bỏ qua; sửa thông tin tài khoản tại mục Người dùng. Không xuất mật khẩu cũ.",
+      "Điền học viên mới vào dòng trống trong sheet Hoc vien, giữ nguyên bốn tiêu đề. Không nhập mật khẩu trong file.",
       "Mã học viên, họ tên, email là bắt buộc. Tên đăng nhập bỏ trống sẽ lấy mã học viên viết thường; tối thiểu 3 ký tự.",
       "Giữ định dạng Text cho mã có số 0 đầu. Không dùng công thức. Email không dấu, không trùng; chấp nhận liên kết mailto Excel tự tạo đúng địa chỉ hiển thị.",
       "Hồ sơ có sẵn chỉ được liên kết khi chưa có tài khoản, đúng họ tên/khóa/đơn vị và không bị phân công sang CTĐT/hướng khác.",
@@ -119,6 +165,19 @@ export class StudentAccountsService {
       `Giới hạn ${limits.maxRows} dòng mỗi lần, ${limits.maxFileBytes / 1024 / 1024} MB. Lớp lớn có thể chia nhiều file.`,
     ].forEach((line) => guide.addRow([line]));
     guide.getColumn(1).width = 130;
+    addExampleSheet(
+      book,
+      sheet,
+      [
+        ["VD_HV_001", "Nguyễn Văn Minh", "minh.vidu@example.com", "vidu_hv001"],
+        ["VD_HV_002", "Trần Thị Lan", "lan.vidu@example.com", "vidu_hv002"],
+      ],
+      [
+        "Điền dữ liệu thật tại sheet Hoc vien. Tất cả tên, email, mã và tài khoản trong sheet ví dụ đều minh họa, phải thay bằng dữ liệu học viên thực tế.",
+        "Mã học viên/họ tên/email là bắt buộc; tên đăng nhập có thể trống để hệ thống sinh từ mã. Email, mã và tài khoản phải hợp lệ, không trùng theo quy định.",
+        "Không thêm mật khẩu vào file nhập. Sheet Hoc vien hien co để đối chiếu dữ liệu đã có; nhập mới không ghi đè tài khoản cũ.",
+      ],
+    );
     return Buffer.from(await book.xlsx.writeBuffer());
   }
   private async parse(id: string, file?: StudentAccountUpload) {
@@ -130,7 +189,44 @@ export class StudentAccountsService {
       throw new PayloadTooLargeException(
         "File vượt giới hạn dung lượng nhập trong SQL.",
       );
-    const rows = await parseStudentAccounts(file.buffer, limits.maxRows);
+    const allRows = await parseStudentAccounts(
+      file.buffer,
+      5000 + limits.maxRows,
+    );
+    const existing = new Map<string, any>();
+    for (let page = 1; ; page++) {
+      const result: any = await this.repository.members(id, {
+        page,
+        limit: 100,
+        searchTerm: "",
+      });
+      for (const member of result.data)
+        if (member.username)
+          existing.set(member.studentCode.toLowerCase(), member);
+      if (page >= result.meta.totalPages) break;
+    }
+    let unchanged = 0;
+    const rows = allRows.filter((row) => {
+      const member = existing.get(row.studentCode.toLowerCase());
+      if (!member) return true;
+      if (
+        !row.errors.length &&
+        row.fullName === member.fullName &&
+        row.email === (member.email || "").toLowerCase() &&
+        row.username === member.username
+      ) {
+        unchanged++;
+        return false;
+      }
+      row.errors.push(
+        "Học viên đã có tài khoản. Giữ nguyên dòng này; sửa thông tin tại mục Người dùng bằng Excel.",
+      );
+      return true;
+    });
+    if (rows.length > limits.maxRows)
+      throw new BadRequestException(
+        `Tối đa ${limits.maxRows} học viên mới mỗi lần nhập; các dòng đã có tài khoản không tính vào giới hạn.`,
+      );
     const previewHash = createHash("sha256")
       .update(file.buffer)
       .update("\0" + item.id + "\0" + item.revision + "\0" + item.trackId)
@@ -139,6 +235,7 @@ export class StudentAccountsService {
       item,
       limits,
       rows,
+      unchanged,
       previewHash,
       fileHash: createHash("sha256").update(file.buffer).digest("hex"),
     };
@@ -154,7 +251,8 @@ export class StudentAccountsService {
       totalRows: rows.length,
       validRows: rows.length - invalid,
       errorRows: invalid,
-      canImport: invalid === 0,
+      canImport: invalid === 0 && rows.length > 0,
+      unchangedRows: parsed.unchanged,
       rows,
     };
   }
@@ -172,6 +270,10 @@ export class StudentAccountsService {
     )
       throw new BadRequestException(
         "File hoặc lớp đã thay đổi. Tải lại lớp và kiểm tra file trước khi tạo tài khoản.",
+      );
+    if (!parsed.rows.length)
+      throw new BadRequestException(
+        "Không có học viên mới; các dòng hiện có được giữ nguyên.",
       );
     const checked = await this.repository.check(id, parsed.rows, classRevision),
       invalid = checked.filter((r) => r.errors.length);

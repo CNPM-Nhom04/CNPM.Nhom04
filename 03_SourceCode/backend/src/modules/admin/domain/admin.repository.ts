@@ -132,6 +132,15 @@ export abstract class AdminRepository {
     actor: Actor,
   ): Promise<UserItem>;
   abstract deleteUser(id: string, actor: Actor): Promise<void>;
+  abstract importCategories(
+    rows: {
+      id: string | null;
+      original: CategoryItem | null;
+      input: CategoryInput;
+    }[],
+    actor: Actor,
+    apply: boolean,
+  ): Promise<any>;
   abstract listCategories(query: ListQuery): Promise<PageResult<CategoryItem>>;
   abstract saveCategory(
     id: string | null,
@@ -140,6 +149,7 @@ export abstract class AdminRepository {
   ): Promise<CategoryItem>;
   abstract deleteCategory(id: string, actor: Actor): Promise<void>;
   abstract getSettings(): Promise<Settings>;
+  abstract getSettingsOptions(): Promise<{ languageRequirements: string[] }>;
   abstract saveSettings(settings: Settings, actor: Actor): Promise<Settings>;
   abstract listAudit(
     query: ListQuery,

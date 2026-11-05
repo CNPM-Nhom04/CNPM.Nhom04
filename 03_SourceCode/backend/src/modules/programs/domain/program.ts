@@ -19,6 +19,7 @@ export interface ProgramQuery {
   limit: number;
   searchTerm?: string;
   selectedStatus?: string;
+  selectedLevel?: "ALL" | "MASTER" | "DOCTOR";
 }
 export interface ProgramInput {
   maCTDT: string;
@@ -116,6 +117,14 @@ export interface ProgramTrack {
   }[];
 }
 export interface ProgramItem extends ProgramInput {
+  sourceUrl?: string | null;
+  sourceDocumentUrl?: string | null;
+  sourceInstitution?: string | null;
+  sourceMajorCode?: string | null;
+  sourceTotalCredits?: number | null;
+  sourceRetrievedAt?: string | null;
+  sourceContent?: string | null;
+  sourceReadOnly?: boolean;
   storedRequiredCredits?: number | null;
   id: string;
   programId: string;
@@ -192,6 +201,10 @@ export abstract class ProgramRepository {
   ): Promise<unknown>;
   abstract baseProgram(id: string, actor: ProgramActor): Promise<ProgramInput>;
   abstract options(actor: ProgramActor): Promise<unknown>;
+  abstract eligibleCourseIds(
+    id: string,
+    actor: ProgramActor,
+  ): Promise<string[]>;
   abstract catalog(query: ProgramQuery, actor: ProgramActor): Promise<unknown>;
   abstract detail(id: string, actor: ProgramActor): Promise<ProgramItem>;
   abstract create(

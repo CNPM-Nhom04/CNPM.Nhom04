@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui";
@@ -434,7 +435,17 @@ export default function PortalAdmin() {
           </>
         }
       >
-        <form id="portal-document" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="documents"
+          onImported={() => {
+            setOpen(false);
+            refresh();
+          }}
+          recordKey={String(editing?.id || "new")}
+          id="portal-document"
+          onSubmit={save}
+          className="space-y-4"
+        >
           <AdminFeedback error={formError} />
           <label className="block space-y-2 text-sm font-medium">
             Tiêu đề
@@ -531,7 +542,7 @@ export default function PortalAdmin() {
             liệu ở nguồn đã nhập; hệ thống không tự sao chép hoặc gửi email hàng
             loạt.
           </p>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

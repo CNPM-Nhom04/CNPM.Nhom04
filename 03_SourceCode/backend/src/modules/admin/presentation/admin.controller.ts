@@ -1,3 +1,5 @@
+import { XLSX_MIME } from "../../../core/excel/workbook";
+import { CategoryExcelService } from "../application/category-excel.service";
 import { FacultyService } from "../application/faculty.service";
 import {
   FacultyInputDto,
@@ -88,6 +90,7 @@ export class AdminController {
     private readonly service: AdminService,
     private readonly majorImport: MajorImportService,
     private readonly faculties: FacultyService,
+    private readonly categoryExcel: CategoryExcelService,
   ) {}
   private actor(request: AdminRequest): Actor {
     return {
@@ -277,6 +280,37 @@ export class AdminController {
     );
   }
 
+  @Get("master-data/import/mau-excel")
+  async categoryTemplate(
+    @Query("focus") focus: string,
+    @Req() request: AdminRequest,
+  ) {
+    return new StreamableFile(
+      await this.categoryExcel.template(this.actor(request), focus),
+      {
+        type: XLSX_MIME,
+        disposition: 'attachment; filename="Danh_muc_hien_co.xlsx"',
+      },
+    );
+  }
+  @Post("master-data/import/kiem-tra")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  categoryPreview(@UploadedFile() file: any, @Req() request: AdminRequest) {
+    return this.categoryExcel.import(file, this.actor(request), false);
+  }
+  @Post("master-data/import/luu")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  categoryImport(@UploadedFile() file: any, @Req() request: AdminRequest) {
+    return this.categoryExcel.import(file, this.actor(request), true);
+  }
   @Get("master-data")
   @ApiOperation({
     summary: "Danh mục khoa/đơn vị, bậc đào tạo, khối kiến thức",
@@ -311,6 +345,12 @@ export class AdminController {
   @ApiOperation({ summary: "Đọc cấu hình tham số đào tạo" })
   getSettings() {
     return this.service.getSettings();
+  }
+
+  @Get("cau-hinh/options")
+  @ApiOperation({ summary: "Danh sách chuẩn ngoại ngữ hiện có để cấu hình" })
+  getSettingsOptions() {
+    return this.service.getSettingsOptions();
   }
 
   @Put("cau-hinh")

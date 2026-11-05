@@ -43,6 +43,10 @@ export class ProgramService {
   options(actor: ProgramActor) {
     return this.repository.options(actor);
   }
+  eligibleCourseIds(id: string, actor: ProgramActor) {
+    this.id(id);
+    return this.repository.eligibleCourseIds(id, actor);
+  }
   catalog(query: ProgramQueryDto, actor: ProgramActor) {
     return this.repository.catalog(query, actor);
   }

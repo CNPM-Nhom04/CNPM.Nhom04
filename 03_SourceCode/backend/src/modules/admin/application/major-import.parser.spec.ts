@@ -1,3 +1,4 @@
+import { addExampleSheet } from "../../../core/excel/examples";
 import { Workbook } from "exceljs";
 import { MAJOR_HEADERS, parseMajorWorkbook } from "./major-import.parser";
 async function file(rows: unknown[][], configure?: (book: Workbook) => void) {
@@ -9,6 +10,18 @@ async function file(rows: unknown[][], configure?: (book: Workbook) => void) {
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 describe("Major Excel parser", () => {
+  it("never imports demonstration majors from the final example sheet", async () => {
+    const rows = await parseMajorWorkbook(
+      await file([["REAL001", "Ngành thật", "FIT", "ACTIVE"]], (book) => {
+        addExampleSheet(book, book.getWorksheet("Nganh dao tao")!, [
+          ["VD001", "Ngành minh họa", "FIT", "ACTIVE"],
+        ]);
+      }),
+      10,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].majorCode).toBe("REAL001");
+  });
   it("preserves leading zeros, Unicode and source row numbers", async () => {
     const rows = await parseMajorWorkbook(
       await file([[], [" 001 ", " Ngành Sư phạm ", "FIT", "ACTIVE"]]),

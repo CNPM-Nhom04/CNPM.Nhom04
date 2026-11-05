@@ -547,7 +547,9 @@ export class MysqlAdminRepository extends AdminRepository {
   private async write<T>(
     actor: Actor,
     callback: (manager: EntityManager) => Promise<T>,
+    manager?: EntityManager,
   ): Promise<T> {
+    if (manager) return callback(manager);
     try {
       return await this.dataSource.transaction(async (manager) => {
         await manager.query("SET time_zone = '+00:00'");
@@ -840,6 +842,94 @@ export class MysqlAdminRepository extends AdminRepository {
     });
   }
 
+  async importCategories(
+    rows: {
+      id: string | null;
+      original: CategoryItem | null;
+      input: CategoryInput;
+    }[],
+    actor: Actor,
+    apply: boolean,
+  ) {
+    if (actor.permission !== "MASTERDATA_MANAGE")
+      throw new ForbiddenException("Cần quyền quản lý danh mục.");
+    return this.write(actor, async (manager) => {
+      const changes = [];
+      let unchanged = 0;
+      const fields = ["maDanhMuc", "tenDanhMuc", "moTa", "trangThai"] as const;
+      for (const row of rows) {
+        let current: CategoryItem | null = null;
+        if (row.id) {
+          const { id, config } = this.categoryId(row.id);
+          await manager.query(
+            `SELECT id FROM ${config.table} WHERE id=? FOR UPDATE`,
+            [id],
+          );
+          current = await this.getCategory(manager, row.id);
+          if (
+            !row.original ||
+            current.loaiDanhMuc !== row.input.loaiDanhMuc ||
+            row.original.loaiDanhMuc !== current.loaiDanhMuc
+          )
+            throw new BadRequestException(
+              "Không thể đổi loại của danh mục đã có.",
+            );
+        }
+        const changed = fields
+          .filter(
+            (key) => !row.original || row.input[key] !== row.original[key],
+          )
+          .filter((key) => !current || current[key] !== row.input[key]);
+        if (current && !changed.length) {
+          unchanged++;
+          continue;
+        }
+        if (current)
+          for (const key of changed)
+            if (current[key] !== row.original![key])
+              throw new ConflictException(
+                `Danh mục ${current.maDanhMuc}: trường ${key} đã được người khác sửa. Tải lại mẫu.`,
+              );
+        const input = current
+          ? {
+              ...current,
+              ...Object.fromEntries(
+                changed.map((key) => [key, row.input[key]]),
+              ),
+            }
+          : row.input;
+        const config = CATEGORIES[input.loaiDanhMuc];
+        const [duplicate] = await manager.query(
+          `SELECT id FROM ${config.table} WHERE ${config.code}=? AND id<>? LIMIT 1`,
+          [input.maDanhMuc, row.id ? this.categoryId(row.id).id : "0"],
+        );
+        if (duplicate)
+          throw new ConflictException(
+            `Mã danh mục ${input.maDanhMuc} đã tồn tại.`,
+          );
+        changes.push({
+          id: row.id,
+          kind: row.id ? "update" : "create",
+          input,
+          fields: changed.map((key) => ({
+            key,
+            before: current?.[key] ?? null,
+            after: row.input[key],
+          })),
+        });
+      }
+      if (apply)
+        for (const change of changes)
+          await this.saveCategory(change.id, change.input, actor, manager);
+      return {
+        changes,
+        created: changes.filter((r) => r.kind === "create").length,
+        updated: changes.filter((r) => r.kind === "update").length,
+        unchanged,
+        applied: apply,
+      };
+    });
+  }
   async listCategories(query: ListQuery): Promise<PageResult<CategoryItem>> {
     const search = query.searchTerm || "";
     const type = query.selectedType || "ALL";
@@ -900,60 +990,67 @@ export class MysqlAdminRepository extends AdminRepository {
     composite: string | null,
     input: CategoryInput,
     actor: Actor,
+    manager?: EntityManager,
   ): Promise<CategoryItem> {
-    return this.write(actor, async (manager) => {
-      const config = CATEGORIES[input.loaiDanhMuc];
-      let id: string;
-      let old: CategoryItem | null = null;
-      if (composite) {
-        const parsed = this.categoryId(composite);
-        if (parsed.type !== input.loaiDanhMuc)
-          throw new BadRequestException("Không thể đổi loại danh mục khi sửa.");
-        id = parsed.id;
-        old = await this.getCategory(manager, composite);
-        await manager.query(
-          `UPDATE ${config.table} SET ${config.code} = ?, ${config.name} = ?, description = ?, status = ? WHERE id = ?`,
-          [
-            input.maDanhMuc,
-            input.tenDanhMuc,
-            input.moTa,
-            input.trangThai ? "ACTIVE" : "INACTIVE",
-            id,
-          ],
-        );
-      } else {
-        const extraColumn =
-          input.loaiDanhMuc === "KHOA_QUAN_LY" ? ", unit_type" : "";
-        const extraValue =
-          input.loaiDanhMuc === "KHOA_QUAN_LY" ? ", 'FACULTY'" : "";
-        await manager.query(
-          `INSERT INTO ${config.table} (${config.code}, ${config.name}, description, status${extraColumn})
+    return this.write(
+      actor,
+      async (manager) => {
+        const config = CATEGORIES[input.loaiDanhMuc];
+        let id: string;
+        let old: CategoryItem | null = null;
+        if (composite) {
+          const parsed = this.categoryId(composite);
+          if (parsed.type !== input.loaiDanhMuc)
+            throw new BadRequestException(
+              "Không thể đổi loại danh mục khi sửa.",
+            );
+          id = parsed.id;
+          old = await this.getCategory(manager, composite);
+          await manager.query(
+            `UPDATE ${config.table} SET ${config.code} = ?, ${config.name} = ?, description = ?, status = ? WHERE id = ?`,
+            [
+              input.maDanhMuc,
+              input.tenDanhMuc,
+              input.moTa,
+              input.trangThai ? "ACTIVE" : "INACTIVE",
+              id,
+            ],
+          );
+        } else {
+          const extraColumn =
+            input.loaiDanhMuc === "KHOA_QUAN_LY" ? ", unit_type" : "";
+          const extraValue =
+            input.loaiDanhMuc === "KHOA_QUAN_LY" ? ", 'FACULTY'" : "";
+          await manager.query(
+            `INSERT INTO ${config.table} (${config.code}, ${config.name}, description, status${extraColumn})
           VALUES (?, ?, ?, ?${extraValue})`,
-          [
-            input.maDanhMuc,
-            input.tenDanhMuc,
-            input.moTa,
-            input.trangThai ? "ACTIVE" : "INACTIVE",
-          ],
+            [
+              input.maDanhMuc,
+              input.tenDanhMuc,
+              input.moTa,
+              input.trangThai ? "ACTIVE" : "INACTIVE",
+            ],
+          );
+          [{ id }] = await manager.query(
+            "SELECT CAST(LAST_INSERT_ID() AS CHAR) AS id",
+          );
+          composite = input.loaiDanhMuc + ":" + id;
+        }
+        const item = await this.getCategory(manager, composite);
+        await this.audit(
+          manager,
+          actor,
+          old ? "UPDATE" : "CREATE",
+          config.table,
+          id,
+          old,
+          item,
+          `${old ? "Cập nhật" : "Tạo"} danh mục ${input.maDanhMuc}`,
         );
-        [{ id }] = await manager.query(
-          "SELECT CAST(LAST_INSERT_ID() AS CHAR) AS id",
-        );
-        composite = input.loaiDanhMuc + ":" + id;
-      }
-      const item = await this.getCategory(manager, composite);
-      await this.audit(
-        manager,
-        actor,
-        old ? "UPDATE" : "CREATE",
-        config.table,
-        id,
-        old,
-        item,
-        `${old ? "Cập nhật" : "Tạo"} danh mục ${input.maDanhMuc}`,
-      );
-      return item;
-    });
+        return item;
+      },
+      manager,
+    );
   }
 
   async deleteCategory(composite: string, actor: Actor): Promise<void> {
@@ -1013,6 +1110,25 @@ export class MysqlAdminRepository extends AdminRepository {
 
   getSettings(): Promise<Settings> {
     return this.readSettings(this.dataSource.manager);
+  }
+
+  async getSettingsOptions(): Promise<{ languageRequirements: string[] }> {
+    const rows = await this.dataSource
+      .query(`SELECT setting_value value FROM system_settings
+      WHERE setting_key IN ('training.ngoaiNguBatBuocThacSi','training.ngoaiNguBatBuocTienSi')
+      UNION SELECT d.language_requirement value FROM program_ui_details d
+      JOIN program_versions v ON v.id=d.program_version_id
+      JOIN training_programs p ON p.id=v.program_id
+      WHERE p.deleted_at IS NULL AND TRIM(COALESCE(d.language_requirement,''))<>''`);
+    return {
+      languageRequirements: [
+        ...new Set<string>([
+          SETTING_DEFAULTS.ngoaiNguBatBuocThacSi,
+          SETTING_DEFAULTS.ngoaiNguBatBuocTienSi,
+          ...rows.map((row) => String(row.value || "").trim()).filter(Boolean),
+        ]),
+      ].sort((a, b) => a.localeCompare(b, "vi")),
+    };
   }
 
   async saveSettings(settings: Settings, actor: Actor): Promise<Settings> {

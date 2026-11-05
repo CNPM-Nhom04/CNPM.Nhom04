@@ -1,5 +1,7 @@
 # Quản lý điểm — NestJS và frontend
 
+> Luồng nhập/sửa hiện tại đã chuyển sang Excel. Xem [hướng dẫn Excel và phạm vi giao diện](../../../../docs/EXCEL_ONLY_WORKFLOWS.md). Phần form/API nhập từng dòng bên dưới là tài liệu của luồng trước; POST tạo/sửa điểm từng dòng đã bị bỏ.
+
 - Trang: http://localhost:3000/dashboard/quan-ly-diem
 - Đăng nhập: http://localhost:3000/dang-nhap
 - Swagger: http://localhost:3002/api → Grades - Quản lý điểm

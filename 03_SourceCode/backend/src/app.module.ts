@@ -1,3 +1,5 @@
+import { ExcelRecordsModule } from "./modules/excel-records/excel-records.module";
+import { ExcelFormsModule } from "./modules/excel-forms/excel-forms.module";
 import { StudentAccountsModule } from "./modules/student-accounts/student-accounts.module";
 import { StudentProgramModule } from "./modules/student-program/student-program.module";
 import { PublicPortalModule } from "./modules/public-portal/public-portal.module";
@@ -38,6 +40,8 @@ import { AdminModule } from "./modules/admin/admin.module";
       }),
     }),
     IdentityModule,
+    ExcelFormsModule,
+    ExcelRecordsModule,
     ReportsModule,
     AdminModule,
     ProgramModule,

@@ -4,7 +4,8 @@ export interface BaoCaoItem {
   tenCTDT: string;
   bacDaoTao: string;
   khoaQuanLy: string;
-  tongTinChi: number;
+  tongTinChi: number | null;
+  sourceUrl?: string | null;
   soHocVien: number;
   trangThai: string;
   status: string | null;

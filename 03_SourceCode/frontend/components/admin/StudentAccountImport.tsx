@@ -79,9 +79,10 @@ export function StudentAccountImport({
           <p>{item.unitName}</p>
         </div>
         <p>
-          Tải mẫu và điền danh sách học viên đã nhập học. Mã học viên, họ tên,
-          email là bắt buộc. Tên đăng nhập để trống sẽ lấy mã học viên viết
-          thường. Tối đa {limits.maxRows} dòng /{" "}
+          Mẫu điền sẵn học viên hiện tại của lớp. Giữ nguyên các dòng đã có tài
+          khoản; thêm học viên mới ở dòng trống. Sửa thông tin tài khoản tại mục
+          Người dùng. Mã học viên, họ tên, email là bắt buộc. Tên đăng nhập để
+          trống sẽ lấy mã học viên viết thường. Tối đa {limits.maxRows} dòng /{" "}
           {limits.maxFileBytes / 1024 / 1024} MB mỗi lần.
         </p>
         <p className="rounded border border-amber-200 bg-amber-50 p-3 leading-6 text-amber-900">
@@ -96,6 +97,12 @@ export function StudentAccountImport({
         >
           Tải mẫu học viên
         </Button>
+        {preview?.unchangedRows ? (
+          <p role="status">
+            Giữ nguyên {preview.unchangedRows} học viên đã có tài khoản.{" "}
+            {preview.totalRows === 0 ? "Chưa có dòng mới để nhập." : ""}
+          </p>
+        ) : null}
         <label className="block space-y-2 font-medium">
           Chọn file Excel
           <input
@@ -153,7 +160,9 @@ export function StudentAccountImport({
               {preview.errorRows}.{" "}
               {preview.canImport
                 ? "Có thể tạo tài khoản."
-                : "Chưa lưu dữ liệu. Sửa file, chọn lại và kiểm tra."}
+                : preview.totalRows === 0
+                  ? "Danh sách không có học viên mới; dữ liệu hiện có được giữ nguyên."
+                  : "Chưa lưu dữ liệu. Sửa file, chọn lại và kiểm tra."}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">

@@ -25,7 +25,8 @@ export default async function Program({
         {program ? (
           <>
             <p className="mt-8 text-xs font-bold uppercase tracking-widest text-emerald-700">
-              {program.levelName} · Khóa {program.cohortYear}
+              {program.levelName}
+              {program.cohortYear ? ` · Khóa ${program.cohortYear}` : ""}
             </p>
             <h1 className="mb-8 mt-3 max-w-4xl text-3xl font-bold leading-tight text-[#113f36] md:text-4xl">
               {program.name}

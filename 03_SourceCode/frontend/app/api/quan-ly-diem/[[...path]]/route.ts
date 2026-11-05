@@ -7,10 +7,10 @@ async function proxy(
   const path = ((await context.params).path ?? []).join("/");
   const allowed =
     request.method === "GET"
-      ? /^(?:|lop-hoc|dang-ky|[1-9]\d{0,19}|lop-hoc\/[1-9]\d{0,19}\/quy-tac)$/.test(
+      ? /^(?:|excel\/(?:options|rows|mau|chuan-bi|danh-sach-mau)|lop-hoc|dang-ky|[1-9]\d{0,19}|lop-hoc\/[1-9]\d{0,19}\/quy-tac)$/.test(
           path,
         )
-      : /^(?:|lop-hoc\/[1-9]\d{0,19}\/quy-tac|[1-9]\d{0,19}\/(?:cap-nhat|chot|huy|mo-lai|dieu-chinh))$/.test(
+      : /^(?:excel\/(?:kiem-tra|luu|danh-sach-kiem-tra|danh-sach-luu)|lop-hoc\/[1-9]\d{0,19}\/quy-tac|[1-9]\d{0,19}\/(?:chot|huy|mo-lai|dieu-chinh))$/.test(
           path,
         );
   if (!allowed)
@@ -33,10 +33,23 @@ async function proxy(
       { message: "Vui lòng đăng nhập để sử dụng chức năng quản lý điểm." },
       { status: 401 },
     );
-  let body: string | undefined;
+  let body: BodyInit | undefined;
+  let multipart = false;
   if (request.method === "POST") {
     try {
-      body = JSON.stringify(await request.json());
+      if (
+        request.headers.get("content-type")?.startsWith("multipart/form-data")
+      ) {
+        const form = await request.formData();
+        const file = form.get("file");
+        if (!(file instanceof File) || file.size > 5 * 1024 * 1024)
+          return NextResponse.json(
+            { message: "Chọn Excel tối đa 5MB." },
+            { status: 400 },
+          );
+        body = form;
+        multipart = true;
+      } else body = JSON.stringify(await request.json());
     } catch {
       return NextResponse.json(
         { message: "Dữ liệu không hợp lệ." },
@@ -53,7 +66,7 @@ async function proxy(
         body,
         headers: {
           Authorization: "Bearer " + token,
-          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(body && !multipart ? { "Content-Type": "application/json" } : {}),
         },
         cache: "no-store",
         signal: AbortSignal.timeout(30000),
@@ -76,7 +89,15 @@ async function proxy(
     return new Response(upstream.body, {
       status: upstream.status,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          upstream.headers.get("Content-Type") || "application/json",
+        ...(upstream.headers.get("Content-Disposition")
+          ? {
+              "Content-Disposition": upstream.headers.get(
+                "Content-Disposition",
+              )!,
+            }
+          : {}),
         "Cache-Control": "no-store",
       },
     });

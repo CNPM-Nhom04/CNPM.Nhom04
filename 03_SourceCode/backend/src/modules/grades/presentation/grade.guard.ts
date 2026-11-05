@@ -26,6 +26,7 @@ export class GradeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<GradeRequest>();
     const [user] = await this.db.query(
       `SELECT u.username,u.account_status,u.deleted_at,
+      (SELECT GROUP_CONCAT(DISTINCT r.role_code) FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.status='ACTIVE') roleCodes,
       (SELECT GROUP_CONCAT(DISTINCT p.permission_code) FROM user_roles ur JOIN roles r ON r.id=ur.role_id
        JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id
        WHERE ur.user_id=u.id AND r.status='ACTIVE') permissionCodes FROM users u WHERE u.id=?`,
@@ -38,16 +39,20 @@ export class GradeGuard implements CanActivate {
       throw new ForbiddenException(
         "Bạn chưa được cấp quyền xem điểm học phần.",
       );
+    const canManage =
+      permissions.includes("GRADE_MANAGE") &&
+      (user.roleCodes || "").split(",").includes("TRAINING_OFFICER");
     const required = this.reflector.get<string>(
       "gradePermission",
       context.getHandler(),
     );
-    if (required && !permissions.includes(required))
+    if (required && !canManage)
       throw new ForbiddenException("Bạn chưa được cấp quyền " + required + ".");
     request.gradeActor = {
       id: String(request.user.userId),
       username: user.username,
-      canManage: permissions.includes("GRADE_MANAGE"),
+      canManage,
+      canPrepare: canManage && permissions.includes("REGISTRATION_MANAGE"),
 
       ip: request.ip || "",
     };

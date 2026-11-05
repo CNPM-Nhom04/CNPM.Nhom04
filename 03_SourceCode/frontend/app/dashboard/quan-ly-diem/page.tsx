@@ -1,1298 +1,1146 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
-import { FileSpreadsheet, Plus } from "lucide-react";
-import { Button } from "@/components/ui";
+import { useEffect, useState } from "react";
+import { Button, Input } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
-import { useSessionUser } from "@/components/auth/SessionProvider";
+import { GradePreparation } from "@/components/excel/GradePreparation";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import {
-  gradeService as api,
-  GradeItem,
-  GradeDetail,
-  GradeList,
-  Page,
-  Offering,
-  Registration,
-  PolicyResponse,
-  ResultStatus,
+  gradeService,
+  type GradeDetail,
+  type PolicyResponse,
+  type GradeList,
 } from "@/lib/services/gradeService";
-const ctl =
-  "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-950 disabled:bg-slate-100 disabled:text-slate-700";
-const results: Record<ResultStatus, string> = {
-  PASSED: "Đạt",
-  FAILED: "Chưa đạt",
-  INCOMPLETE: "Chưa hoàn tất",
-  EXEMPTED: "Miễn học phần",
+import { downloadExcel } from "@/lib/services/excelDownload";
+type Option = {
+  unitId: string;
+  unitName: string;
+  classId: string;
+  classCode: string;
+  className: string;
+  termId: string;
+  academicYear: string;
+  semester: string;
 };
-const states: Record<string, string> = {
-  LEGACY: "Kết quả cũ",
-  DRAFT: "Nháp",
+type Row = {
+  registrationId: string;
+  studentCode: string;
+  studentName: string;
+  offeringId: string;
+  offeringCode: string;
+  courseCode: string;
+  courseName: string;
+  resultId: string | null;
+  state: string;
+  attendanceScore: number | null;
+  midtermScore: number | null;
+  examScore: number | null;
+  totalScore: number | null;
+  grade: string | null;
+  resultStatus: string | null;
+  policyId: string | null;
+};
+type Preview = {
+  changed: number;
+  unchanged: number;
+  applied: boolean;
+  changes: {
+    registrationId: string;
+    studentCode: string;
+    courseCode: string;
+    fields: { key: string; before: number | null; after: number | null }[];
+  }[];
+};
+const names: Record<string, string> = {
+  attendanceScore: "Chuyên cần",
+  midtermScore: "Giữa kỳ",
+  examScore: "Thi",
+};
+const gradeStates: Record<string, string> = {
+  DRAFT: "Điểm nháp",
   FINALIZED: "Đã chốt",
-  VOIDED: "Đã hủy",
+  VOIDED: "Đã hủy hiệu lực",
+  LEGACY: "Kết quả lịch sử",
+};
+const classStates: Record<string, string> = {
+  PLANNED: "Dự kiến",
+  OPEN: "Đang mở",
+  CLOSED: "Đã đóng",
+  CONFIRMED: "Đã xác nhận",
+  COMPLETED: "Đã hoàn tất",
+  CANCELLED: "Đã hủy",
 };
 const historyLabels: Record<string, string> = {
-  GRADE_CREATE: "Nhập nháp",
-  GRADE_UPDATE: "Cập nhật nháp",
-  GRADE_FINALIZE: "Chốt điểm",
+  GRADE_CREATE: "Tạo điểm nháp",
+  GRADE_UPDATE: "Cập nhật điểm nháp",
   GRADE_CORRECT: "Điều chỉnh điểm đã chốt",
-  GRADE_VOID: "Hủy hiệu lực",
-  GRADE_REOPEN: "Mở lại nhập điểm",
-  GRADE_LEGACY_CORRECT: "Điều chỉnh theo hồ sơ cũ",
+  GRADE_FINALIZE: "Chốt điểm",
+  GRADE_VOID: "Hủy hiệu lực điểm",
+  GRADE_REOPEN: "Mở lại điểm nháp",
+  GRADE_LEGACY_CORRECT: "Điều chỉnh kết quả lịch sử",
 };
-const errorText = (e: unknown) =>
-  e instanceof Error ? e.message : "Không thể thực hiện yêu cầu.";
-const blankScores = () => ({
-  attendanceScore: "",
-  midtermScore: "",
-  examScore: "",
-});
-const scoreNames = {
-  attendanceScore: "Điểm chuyên cần",
-  midtermScore: "Điểm giữa kỳ",
-  examScore: "Điểm thi",
-};
-const blankPolicy = () => ({
-  attendanceWeight: "",
-  midtermWeight: "",
-  examWeight: "",
-  passingScore: "",
-  decimalPlaces: "",
-  rounding: "",
-  reference: "",
-});
-export default function QuanLyDiemPage() {
-  const user = useSessionUser();
-  const [tab, setTab] = useState<"grades" | "classes">("grades");
-  const [list, setList] = useState<GradeList | null>(null),
-    [classes, setClasses] = useState<Page<Offering> | null>(null);
-  const [search, setSearch] = useState(""),
-    [resultStatus, setResultStatus] = useState("ALL"),
-    [state, setState] = useState("ALL"),
-    [page, setPage] = useState(1),
-    [reload, setReload] = useState(0);
-  const [loading, setLoading] = useState(true),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false);
-  const [detail, setDetail] = useState<GradeDetail | null>(null),
-    [detailError, setDetailError] = useState("");
-  const [editor, setEditor] = useState<GradeDetail | "new" | null>(null),
-    [scores, setScores] = useState(blankScores),
-    [note, setNote] = useState(""),
-    [reference, setReference] = useState(""),
-    [formError, setFormError] = useState("");
-  const [registration, setRegistration] = useState<Registration | null>(null),
-    [registrationSearch, setRegistrationSearch] = useState(""),
-    [registrationPage, setRegistrationPage] = useState(1),
-    [registrations, setRegistrations] = useState<Page<Registration> | null>(
-      null,
-    ),
-    [registrationLoading, setRegistrationLoading] = useState(false),
-    [registrationError, setRegistrationError] = useState("");
-  const [entryPolicy, setEntryPolicy] = useState<PolicyResponse | null>(null),
-    [entryPolicyLoading, setEntryPolicyLoading] = useState(false),
-    [entryPolicyError, setEntryPolicyError] = useState("");
-  const [legacyGrade, setLegacyGrade] = useState(""),
-    [legacyStatus, setLegacyStatus] = useState<ResultStatus>("INCOMPLETE"),
-    [passedDate, setPassedDate] = useState("");
-  const [policyModal, setPolicyModal] = useState<PolicyResponse | null>(null),
-    [policyForm, setPolicyForm] = useState(blankPolicy),
-    [policyError, setPolicyError] = useState("");
-  const [action, setAction] = useState<"chot" | "huy" | "mo-lai" | null>(null),
-    [actionNote, setActionNote] = useState(""),
-    [actionReference, setActionReference] = useState(""),
-    [actionError, setActionError] = useState("");
-  const canManage =
-    list?.permissions.canManage ?? !!user?.permissions.includes("GRADE_MANAGE");
-  useEffect(() => {
-    const abort = new AbortController();
-    queueMicrotask(() => {
-      if (!abort.signal.aborted) {
-        setLoading(true);
-        setError("");
-      }
-    });
-    const timer = setTimeout(() => {
-      const job =
-        tab === "grades"
-          ? api
-              .list(search, resultStatus, state, page, abort.signal)
-              .then(setList)
-          : api.classes(search, page, abort.signal).then(setClasses);
-      job
-        .catch((e) => {
-          if (!abort.signal.aborted) setError(errorText(e));
-        })
-        .finally(() => {
-          if (!abort.signal.aborted) setLoading(false);
-        });
-    }, 250);
-    return () => {
-      clearTimeout(timer);
-      abort.abort();
-    };
-  }, [tab, search, resultStatus, state, page, reload]);
-  useEffect(() => {
-    if (editor !== "new") return;
-    const abort = new AbortController();
-    queueMicrotask(() => {
-      if (!abort.signal.aborted) {
-        setRegistrationLoading(true);
-        setRegistrationError("");
-      }
-    });
-    const timer = setTimeout(
-      () =>
-        api
-          .registrations(registrationSearch, registrationPage, abort.signal)
-          .then(setRegistrations)
-          .catch((e) => {
-            if (!abort.signal.aborted) setRegistrationError(errorText(e));
-          })
-          .finally(() => {
-            if (!abort.signal.aborted) setRegistrationLoading(false);
-          }),
-      250,
+const commandInfo = {
+  chot: {
+    label: "Chốt điểm",
+    heading: "Hồ sơ chốt điểm",
+    description:
+      "Điền lý do chốt và số hồ sơ thực tế trong Excel, tải lên để kiểm tra rồi xác nhận chốt. Thao tác xác nhận kết quả chính thức của học viên.",
+  },
+  huy: {
+    label: "Hủy hiệu lực",
+    heading: "Hồ sơ hủy hiệu lực điểm",
+    description:
+      "Điền lý do hủy và số hồ sơ thực tế trong Excel. Khi xác nhận, kết quả ngừng được tính đạt; dữ liệu và lịch sử vẫn được lưu.",
+  },
+  "mo-lai": {
+    label: "Mở lại điểm nháp",
+    heading: "Hồ sơ mở lại điểm",
+    description:
+      "Điền lý do mở lại và số hồ sơ thực tế trong Excel. Khi xác nhận, điểm trở về nháp với các ô điểm thành phần trống để nhập lại.",
+  },
+} as const;
+async function request<T>(path: string, options: RequestInit = {}) {
+  const r = await fetch("/api/quan-ly-diem" + path, {
+    ...options,
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    const b = await r.json().catch(() => null);
+    throw new Error(
+      Array.isArray(b?.message)
+        ? b.message.join("\n")
+        : b?.message || "Không thực hiện được yêu cầu.",
     );
-    return () => {
-      clearTimeout(timer);
-      abort.abort();
-    };
-  }, [editor, registrationSearch, registrationPage, reload]);
-  const offeringId =
-    editor === "new" ? registration?.offeringId : editor?.offeringId;
+  }
+  return r.json() as Promise<T>;
+}
+function PolicyEditor({
+  data,
+  onSaved,
+}: {
+  data: PolicyResponse;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    attendanceWeight: String(data.policy?.attendanceWeight ?? ""),
+    midtermWeight: String(data.policy?.midtermWeight ?? ""),
+    examWeight: String(data.policy?.examWeight ?? ""),
+    passingScore: String(
+      data.policy?.passingScore ?? data.configuredPassingScore ?? "",
+    ),
+    decimalPlaces: String(data.policy?.decimalPlaces ?? ""),
+    rounding: data.policy?.rounding || "",
+    reference: data.policy?.reference || "",
+  });
+  const [error, setError] = useState("");
+  return (
+    <>
+      <p className="text-sm mb-3">
+        {data.offering.classCode} · {data.offering.courseName}
+      </p>
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
+      <p className="mb-3 text-sm text-slate-600">
+        Quy tắc áp dụng riêng cho lớp học phần này và dùng chung để tính tổng
+        điểm của các học viên.
+      </p>
+      {data.policy && (
+        <div className="mb-3 rounded-lg bg-slate-50 p-3 text-sm space-y-1">
+          <p>
+            Trọng số: chuyên cần {data.policy.attendanceWeight}% · giữa kỳ{" "}
+            {data.policy.midtermWeight}% · thi {data.policy.examWeight}%.
+          </p>
+          <p>
+            Điểm đạt: {data.policy.passingScore} · {data.policy.decimalPlaces}{" "}
+            số lẻ ·{" "}
+            {data.policy.rounding === "HALF_UP" ? "Làm tròn" : "Cắt phần dư"}.
+          </p>
+          <p>Hồ sơ quy tắc: {data.policy.reference}</p>
+        </div>
+      )}
+      {data.frozen ? (
+        <p>Quy tắc đã được sử dụng và được giữ cố định để bảo toàn điểm.</p>
+      ) : (
+        <ExcelOnlyForm
+          recordLabel={`${data.offering.classCode} — ${data.offering.courseName}`}
+          recordKey={data.offering.id}
+          heading="Cấu hình quy tắc tính điểm bằng Excel"
+          description="Điền trọng số chuyên cần, giữa kỳ, thi (tổng 100%), điểm đạt, cách làm tròn và số hồ sơ của quy tắc. Xem tab Ví dụ điền đúng ở cuối file."
+          templateLabel="Tải mẫu quy tắc tính điểm"
+          submitLabel="Xác nhận lưu quy tắc"
+          showDependentStep={false}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            try {
+              await gradeService.savePolicy(data.offering.id, {
+                revision: data.policy?.revision || 0,
+                attendanceWeight: Number(form.attendanceWeight),
+                midtermWeight: Number(form.midtermWeight),
+                examWeight: Number(form.examWeight),
+                passingScore: Number(form.passingScore),
+                decimalPlaces: Number(form.decimalPlaces),
+                rounding: form.rounding as "HALF_UP" | "TRUNCATE",
+                reference: form.reference,
+              });
+              onSaved();
+            } catch (e) {
+              setError(
+                e instanceof Error ? e.message : "Không lưu được quy tắc.",
+              );
+            }
+          }}
+        >
+          {(
+            [
+              "attendanceWeight",
+              "midtermWeight",
+              "examWeight",
+              "passingScore",
+              "decimalPlaces",
+            ] as const
+          ).map((key) => (
+            <Input
+              key={key}
+              name={key}
+              label={
+                {
+                  attendanceWeight: "Trọng số chuyên cần (%)",
+                  midtermWeight: "Trọng số giữa kỳ (%)",
+                  examWeight: "Trọng số thi (%)",
+                  passingScore: "Điểm đạt",
+                  decimalPlaces: "Số chữ số thập phân",
+                }[key]
+              }
+              type="number"
+              min={key === "passingScore" ? 0.01 : 0}
+              max={
+                key === "passingScore" ? 10 : key === "decimalPlaces" ? 2 : 100
+              }
+              step={key === "decimalPlaces" ? 1 : 0.01}
+              required
+              value={form[key]}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+            />
+          ))}
+          <label>
+            Cách làm tròn
+            <select
+              name="rounding"
+              required
+              value={form.rounding}
+              onChange={(e) => setForm({ ...form, rounding: e.target.value })}
+            >
+              <option value="">Chọn</option>
+              <option value="HALF_UP">Làm tròn</option>
+              <option value="TRUNCATE">Cắt phần dư</option>
+            </select>
+          </label>
+          <Input
+            name="reference"
+            label="Số hồ sơ quy tắc"
+            required
+            value={form.reference}
+            onChange={(e) => setForm({ ...form, reference: e.target.value })}
+          />
+        </ExcelOnlyForm>
+      )}
+    </>
+  );
+}
+function GradeAction({
+  detail,
+  action,
+  onSaved,
+}: {
+  detail: GradeDetail;
+  action: "chot" | "huy" | "mo-lai";
+  onSaved: () => void;
+}) {
+  const [note, setNote] = useState(""),
+    [reference, setReference] = useState(""),
+    [error, setError] = useState(""),
+    [pending, setPending] = useState(false);
+  const info = commandInfo[action];
+  return (
+    <fieldset disabled={pending} className="space-y-3">
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
+      {pending && (
+        <p role="status">
+          Đang thực hiện {info.label.toLocaleLowerCase("vi")}…
+        </p>
+      )}
+      <ExcelOnlyForm
+        recordLabel={`${detail.studentCode} — ${detail.studentName} · ${detail.courseCode}`}
+        recordKey={detail.id + ":" + action}
+        heading={info.heading}
+        description={
+          info.description +
+          " File chỉ cần lý do và số hồ sơ; xem tab Ví dụ điền đúng để đối chiếu."
+        }
+        templateLabel={`Tải mẫu ${info.heading.toLocaleLowerCase("vi")}`}
+        submitLabel={`Xác nhận ${info.label.toLocaleLowerCase("vi")}`}
+        downloadFilename={`Ho_so_${action}_${detail.studentCode}_${detail.courseCode}.xlsx`}
+        showDependentStep={false}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          setError("");
+          try {
+            await gradeService.action(detail.id, action, {
+              revision: detail.revision,
+              note,
+              reference,
+            });
+            onSaved();
+          } catch (e) {
+            setError(
+              e instanceof Error ? e.message : "Không thực hiện được thao tác.",
+            );
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        <Input
+          name="note"
+          label={`Lý do ${info.label.toLocaleLowerCase("vi")}`}
+          required
+          minLength={10}
+          maxLength={1000}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+        />
+        <Input
+          name="reference"
+          label="Số hồ sơ thực tế"
+          required
+          maxLength={255}
+          value={reference}
+          onChange={(event) => setReference(event.target.value)}
+        />
+      </ExcelOnlyForm>
+    </fieldset>
+  );
+}
+function LegacyEditor({
+  detail,
+  onSaved,
+}: {
+  detail: GradeDetail;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    grade: detail.grade || "",
+    resultStatus: detail.resultStatus,
+    passedDate: detail.passedDate || "",
+    note: "",
+    reference: "",
+  });
+  const [error, setError] = useState("");
+  return (
+    <>
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
+      <ExcelOnlyForm
+        recordLabel={`${detail.studentCode} — ${detail.studentName} · ${detail.courseCode}`}
+        recordKey={detail.id}
+        heading="Hồ sơ điều chỉnh kết quả lịch sử"
+        description="Điền điểm hoặc ký hiệu chính thức, kết quả, ngày đạt/miễn và căn cứ điều chỉnh theo hồ sơ thực tế. Xem tab Ví dụ điền đúng trước khi nhập."
+        templateLabel="Tải mẫu điều chỉnh kết quả lịch sử"
+        submitLabel="Xác nhận điều chỉnh kết quả"
+        showDependentStep={false}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          try {
+            await gradeService.legacy(detail.id, {
+              ...form,
+              grade: form.grade || null,
+              passedDate: form.passedDate || null,
+              revision: detail.revision,
+            });
+            onSaved();
+          } catch (e) {
+            setError(
+              e instanceof Error
+                ? e.message
+                : "Không điều chỉnh được điểm lịch sử.",
+            );
+          }
+        }}
+      >
+        <Input
+          name="grade"
+          label="Điểm hoặc ký hiệu chính thức"
+          value={form.grade}
+          onChange={(e) => setForm({ ...form, grade: e.target.value })}
+        />
+        <label>
+          Kết quả
+          <select
+            name="resultStatus"
+            value={form.resultStatus}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                resultStatus: e.target.value as typeof form.resultStatus,
+              })
+            }
+          >
+            {["PASSED", "FAILED", "INCOMPLETE", "EXEMPTED"].map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Input
+          name="passedDate"
+          type="date"
+          label="Ngày đạt / miễn theo hồ sơ"
+          value={form.passedDate}
+          onChange={(e) => setForm({ ...form, passedDate: e.target.value })}
+        />
+        <Input
+          name="note"
+          label="Lý do điều chỉnh"
+          required
+          minLength={10}
+          value={form.note}
+          onChange={(e) => setForm({ ...form, note: e.target.value })}
+        />
+        <Input
+          name="reference"
+          label="Số hồ sơ"
+          required
+          value={form.reference}
+          onChange={(e) => setForm({ ...form, reference: e.target.value })}
+        />
+      </ExcelOnlyForm>
+    </>
+  );
+}
+export default function GradesPage() {
+  const [legacy, setLegacy] = useState<GradeList | null>(null),
+    [legacyPage, setLegacyPage] = useState(1),
+    [printTarget, setPrintTarget] = useState("grade-print");
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+  const [options, setOptions] = useState<Option[]>([]),
+    [canManage, setCanManage] = useState(false);
+  const [unitId, setUnitId] = useState(""),
+    [classId, setClassId] = useState(""),
+    [termId, setTermId] = useState("");
+  const [rows, setRows] = useState<Row[]>([]),
+    [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(false),
+    [error, setError] = useState(""),
+    [message, setMessage] = useState(""),
+    [version, setVersion] = useState(0);
+  const [file, setFile] = useState<File | null>(null),
+    [preview, setPreview] = useState<Preview | null>(null),
+    [detail, setDetail] = useState<GradeDetail | null>(null),
+    [policy, setPolicy] = useState<PolicyResponse | null>(null),
+    [command, setCommand] = useState<"chot" | "huy" | "mo-lai" | null>(null);
   useEffect(() => {
-    if (
-      !editor ||
-      !offeringId ||
-      (editor !== "new" && editor.state === "LEGACY")
+    const c = new AbortController();
+    request<{ data: Option[]; permissions: { canManage: boolean } }>(
+      "/excel/options",
+      { signal: c.signal },
     )
-      return;
-    const abort = new AbortController();
-    queueMicrotask(() => {
-      if (!abort.signal.aborted) {
-        setEntryPolicyLoading(true);
-        setEntryPolicy(null);
-        setEntryPolicyError("");
-      }
-    });
-    api
-      .policy(offeringId, abort.signal)
-      .then(setEntryPolicy)
+      .then((d) => {
+        setOptions(d.data);
+        setOptionsLoaded(true);
+        setCanManage(d.permissions.canManage);
+      })
       .catch((e) => {
-        if (!abort.signal.aborted) setEntryPolicyError(errorText(e));
+        if (!c.signal.aborted) setError(e.message);
+      });
+    return () => c.abort();
+  }, []);
+  useEffect(() => {
+    if (!classId || !termId) return;
+    const c = new AbortController();
+    request<Row[]>("/excel/rows?" + new URLSearchParams({ classId, termId }), {
+      signal: c.signal,
+    })
+      .then((data) => {
+        if (!c.signal.aborted) setRows(data);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setError(e.message);
       })
       .finally(() => {
-        if (!abort.signal.aborted) setEntryPolicyLoading(false);
+        if (!c.signal.aborted) setLoading(false);
       });
-    return () => abort.abort();
-  }, [editor, offeringId, reload]);
-  const refresh = () => setReload((n) => n + 1);
-  async function view(item: GradeItem) {
-    setBusy(true);
-    setDetailError("");
+    return () => c.abort();
+  }, [classId, termId, version]);
+  useEffect(() => {
+    const controller = new AbortController();
+    gradeService
+      .list("", "ALL", "LEGACY", legacyPage, controller.signal)
+      .then(setLegacy)
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [legacyPage, version]);
+  const units = [...new Map(options.map((o) => [o.unitId, o])).values()];
+  const classes = [
+    ...new Map(
+      options.filter((o) => o.unitId === unitId).map((o) => [o.classId, o]),
+    ).values(),
+  ];
+  const terms = [
+    ...new Map(
+      options
+        .filter((o) => o.unitId === unitId && o.classId === classId)
+        .map((o) => [o.termId, o]),
+    ).values(),
+  ];
+  const selected = options.find(
+    (o) => o.classId === classId && o.termId === termId,
+  );
+  function refreshRows() {
+    setLoading(Boolean(classId && termId));
+    setRows([]);
     setError("");
-    try {
-      setDetail(await api.detail(item.id));
-    } catch (e) {
-      if (detail) setDetailError(errorText(e));
-      else setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
+    setVersion((v) => v + 1);
   }
-  function begin(item: GradeDetail | "new") {
-    setEditor(item);
-    setFormError("");
-    setNotice("");
-    setNote("");
-    setReference("");
-    setRegistration(null);
-    setRegistrations(null);
-    setRegistrationSearch("");
-    setRegistrationPage(1);
-    setRegistrationError("");
-    setEntryPolicy(null);
-    setEntryPolicyError("");
-    setScores(
-      item === "new"
-        ? blankScores()
-        : {
-            attendanceScore:
-              item.attendanceScore == null ? "" : String(item.attendanceScore),
-            midtermScore:
-              item.midtermScore == null ? "" : String(item.midtermScore),
-            examScore: item.examScore == null ? "" : String(item.examScore),
-          },
-    );
-    if (item !== "new") {
-      setLegacyGrade(item.grade || "");
-      setLegacyStatus(item.resultStatus);
-      setPassedDate(item.passedDate || "");
-    }
+  function reset() {
+    setLoading(false);
+    setFile(null);
+    setPreview(null);
+    setRows([]);
+    setMessage("");
+    setError("");
   }
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    if (!editor || busy) return;
+  async function upload(selectedFile: File, apply = false) {
     setBusy(true);
-    setFormError("");
+    setError("");
+    setMessage("");
     try {
-      let saved: GradeDetail;
-      if (editor !== "new" && editor.state === "LEGACY") {
-        saved = await api.legacy(editor.id, {
-          revision: editor.revision,
-          grade: legacyGrade || null,
-          resultStatus: legacyStatus,
-          passedDate: ["PASSED", "EXEMPTED"].includes(legacyStatus)
-            ? passedDate
-            : null,
-          note,
-          reference,
-        });
+      const body = new FormData();
+      body.append("file", selectedFile);
+      const d = await request<Preview>(
+        "/excel/" +
+          (apply ? "luu" : "kiem-tra") +
+          "?" +
+          new URLSearchParams({ classId, termId }),
+        { method: "POST", body },
+      );
+      if (apply) {
+        setMessage(
+          `Đã cập nhật ${d.changed} dòng; giữ nguyên ${d.unchanged} dòng không đổi.`,
+        );
+        setPreview(null);
+        setFile(null);
+        refreshRows();
       } else {
-        const values = {
-          attendanceScore:
-            scores.attendanceScore === ""
-              ? null
-              : Number(scores.attendanceScore),
-          midtermScore:
-            scores.midtermScore === "" ? null : Number(scores.midtermScore),
-          examScore: scores.examScore === "" ? null : Number(scores.examScore),
-          note,
-          reference,
-        };
-        if (editor === "new") {
-          if (!registration)
-            throw new Error("Hãy chọn đăng ký học phần từ SQL.");
-          saved = await api.create({
-            ...values,
-            registrationId: registration.id,
-          });
-        } else
-          saved = await api.update(editor.id, {
-            ...values,
-            revision: editor.revision,
-          });
+        setFile(selectedFile);
+        setPreview(d);
       }
-      setDetail(saved);
-      setEditor(null);
-      setNotice("Đã lưu điểm và lịch sử vào CSDL.");
-      refresh();
     } catch (e) {
-      setFormError(errorText(e));
+      setError(e instanceof Error ? e.message : "Không nhập được Excel.");
+      setPreview(null);
     } finally {
       setBusy(false);
     }
   }
-  async function openPolicy(item: Offering) {
-    setBusy(true);
-    setError("");
-    setPolicyError("");
-    try {
-      const data = await api.policy(item.id);
-      setPolicyModal(data);
-      const p = data.policy;
-      setPolicyForm(
-        p
-          ? {
-              attendanceWeight: String(p.attendanceWeight),
-              midtermWeight: String(p.midtermWeight),
-              examWeight: String(p.examWeight),
-              passingScore: String(p.passingScore),
-              decimalPlaces: String(p.decimalPlaces),
-              rounding: p.rounding,
-              reference: p.reference,
-            }
-          : {
-              ...blankPolicy(),
-              passingScore:
-                data.configuredPassingScore == null
-                  ? ""
-                  : String(data.configuredPassingScore),
-            },
-      );
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function savePolicy(e: FormEvent) {
-    e.preventDefault();
-    if (!policyModal || busy) return;
-    setBusy(true);
-    setPolicyError("");
-    try {
-      await api.savePolicy(policyModal.offering.id, {
-        attendanceWeight: Number(policyForm.attendanceWeight),
-        midtermWeight: Number(policyForm.midtermWeight),
-        examWeight: Number(policyForm.examWeight),
-        passingScore: Number(policyForm.passingScore),
-        decimalPlaces: Number(policyForm.decimalPlaces),
-        rounding: policyForm.rounding as "HALF_UP" | "TRUNCATE",
-        reference: policyForm.reference,
-        revision: policyModal.policy?.revision ?? 0,
-      });
-      setPolicyModal(null);
-      setNotice("Đã lưu quy tắc chấm điểm lớp học phần vào SQL.");
-      refresh();
-    } catch (e) {
-      setPolicyError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  function beginAction(value: "chot" | "huy" | "mo-lai") {
-    setAction(value);
-    setActionNote("");
-    setActionReference("");
-    setActionError("");
-  }
-  async function submitAction(e: FormEvent) {
-    e.preventDefault();
-    if (!detail || !action || busy) return;
-    setBusy(true);
-    setActionError("");
-    try {
-      setDetail(
-        await api.action(detail.id, action, {
-          revision: detail.revision,
-          note: actionNote,
-          reference: actionReference,
-        }),
-      );
-      setAction(null);
-      setNotice("Đã cập nhật kết quả và lịch sử SQL.");
-      refresh();
-    } catch (e) {
-      setActionError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  function pager(
-    meta: Page<unknown>["meta"] | undefined,
-    current: number,
-    change: (v: number) => void,
-  ) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
-        <span>
-          Tổng {meta?.total ?? 0} · Trang {current}/
-          {Math.max(1, meta?.totalPages ?? 1)}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || current <= 1}
-            onClick={() => change(current - 1)}
-          >
-            Trang trước
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || !meta || current >= meta.totalPages}
-            onClick={() => change(current + 1)}
-          >
-            Trang sau
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  const legacy = editor && editor !== "new" && editor.state === "LEGACY";
-  const policyDisabled =
-    busy || !policyModal?.permissions.canManage || !!policyModal?.frozen;
   return (
-    <div className="space-y-5 pb-16 text-slate-950">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-6">
+    <div className="space-y-4 pb-10">
+      <div className="flex justify-between items-center gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold">
-            <FileSpreadsheet className="text-blue-600" />
-            Quản Lý Điểm Số & Đánh Giá Học Phần
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Kết quả học tập từ SQL; điểm thành phần theo quy tắc lớp đã lưu.
+          <h1 className="text-xl font-bold">Bảng điểm</h1>
+          <p className="text-sm text-slate-500">
+            {canManage
+              ? "Nhập và điều chỉnh bằng Excel; chỉ cập nhật phần khác biệt."
+              : "Xem và in bảng điểm trong phạm vi được cấp."}
           </p>
         </div>
-        {canManage && (
-          <Button disabled={busy} onClick={() => begin("new")}>
-            <Plus className="mr-1 h-4 w-4" />
-            Nhập bảng điểm mới
-          </Button>
-        )}
-      </header>
-      {notice && (
-        <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">
-          {notice}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
         <Button
-          variant={tab === "grades" ? "primary" : "outline"}
+          variant="outline"
+          disabled={!rows.length || loading}
           onClick={() => {
-            setTab("grades");
-            setSearch("");
-            setPage(1);
+            setPrintTarget("grade-print");
+            setTimeout(() => window.print(), 50);
           }}
         >
-          Kết quả học tập
-        </Button>
-        <Button
-          variant={tab === "classes" ? "primary" : "outline"}
-          onClick={() => {
-            setTab("classes");
-            setSearch("");
-            setPage(1);
-          }}
-        >
-          Lớp & quy tắc chấm điểm
+          In bảng điểm
         </Button>
       </div>
-      <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <input
-          aria-label="Tìm kiếm"
-          className={ctl + " flex-1"}
-          placeholder={
-            tab === "grades"
-              ? "Tìm học viên, mã/tên học phần hoặc lớp..."
-              : "Tìm mã lớp hoặc học phần..."
-          }
-          value={search}
-          maxLength={255}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg bg-red-50 p-3 text-sm text-red-700 whitespace-pre-line"
+        >
+          {error}
+        </p>
+      )}
+      {message && (
+        <p
+          role="status"
+          className="rounded-lg bg-green-50 p-3 text-green-800 text-sm"
+        >
+          {message}
+        </p>
+      )}
+      {optionsLoaded && !options.length && (
+        <p
+          role="status"
+          className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          Chưa có lớp hoặc học kỳ trong phạm vi tài khoản. Cần cấu hình lớp và
+          học kỳ trước; bảng điểm chỉ có dữ liệu khi học viên đã được xếp lớp và
+          đăng ký học phần.
+        </p>
+      )}
+      <section className="grid md:grid-cols-3 gap-3 rounded-xl border bg-white p-4 print:hidden">
+        <label className="text-sm space-y-1">
+          1. Khoa
+          <select
+            aria-label="Chọn khoa"
+            className="block w-full border rounded-lg p-2"
+            value={unitId}
+            disabled={busy}
+            onChange={(e) => {
+              setUnitId(e.target.value);
+              setClassId("");
+              setTermId("");
+              reset();
+            }}
+          >
+            <option value="">Chọn khoa</option>
+            {units.map((o) => (
+              <option key={o.unitId} value={o.unitId}>
+                {o.unitName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm space-y-1">
+          2. Lớp
+          <select
+            aria-label="Chọn lớp"
+            className="block w-full border rounded-lg p-2"
+            value={classId}
+            disabled={!unitId || busy}
+            onChange={(e) => {
+              setClassId(e.target.value);
+              setTermId("");
+              reset();
+            }}
+          >
+            <option value="">Chọn lớp</option>
+            {classes.map((o) => (
+              <option key={o.classId} value={o.classId}>
+                {o.classCode} — {o.className}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm space-y-1">
+          3. Học kỳ
+          <select
+            aria-label="Chọn học kỳ"
+            className="block w-full border rounded-lg p-2"
+            value={termId}
+            disabled={!classId || busy}
+            onChange={(e) => {
+              setTermId(e.target.value);
+              reset();
+              setLoading(Boolean(classId && e.target.value));
+            }}
+          >
+            <option value="">Chọn học kỳ</option>
+            {terms.map((o) => (
+              <option key={o.termId} value={o.termId}>
+                {o.academicYear} · HK{" "}
+                {String(o.semester).replace(/^HK\s*/i, "")}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+      {canManage && classId && termId && !loading && (
+        <GradePreparation
+          key={`${classId}:${termId}:${version}`}
+          classId={classId}
+          termId={termId}
+          hasRows={rows.length > 0}
+          onSaved={() => {
+            setError("");
+            setMessage(
+              "Đã lập danh sách học. Cấu hình quy tắc điểm nếu chưa có, rồi tải mẫu điểm để nhập.",
+            );
+            setFile(null);
+            setPreview(null);
+            refreshRows();
+          }}
+          onPolicy={async (id) => {
+            try {
+              setPolicy(await gradeService.policy(id));
+            } catch (e) {
+              setError(
+                e instanceof Error ? e.message : "Không tải được quy tắc.",
+              );
+            }
           }}
         />
-        {tab === "grades" && (
-          <>
-            <select
-              aria-label="Lọc kết quả"
-              className={ctl + " md:w-48"}
-              value={resultStatus}
-              onChange={(e) => {
-                setResultStatus(e.target.value);
-                setPage(1);
+      )}
+      {canManage && classId && termId && (
+        <section className="rounded-xl border bg-blue-50/40 p-4 space-y-3 print:hidden text-sm">
+          <p>
+            Bước 3 · Mẫu chứa điểm hiện có. Sửa các ô cần đổi, điền lý do và số
+            hồ sơ tại dòng thay đổi; không xóa dữ liệu ngoài file.
+          </p>
+          <div className="flex flex-wrap gap-3 items-center">
+            <Button
+              variant="outline"
+              disabled={busy || loading || !rows.length}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await downloadExcel(
+                    "/api/quan-ly-diem/excel/mau?" +
+                      new URLSearchParams({ classId, termId }),
+                    "Bang_diem_" + selected?.classCode + ".xlsx",
+                  );
+                } catch (e) {
+                  setError(
+                    e instanceof Error ? e.message : "Không tải được mẫu.",
+                  );
+                } finally {
+                  setBusy(false);
+                }
               }}
             >
-              <option value="ALL">Tất cả kết quả</option>
-              {Object.entries(results).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Lọc trạng thái"
-              className={ctl + " md:w-44"}
-              value={state}
+              Tải Excel có điểm phiên bản trước
+            </Button>
+            <input
+              aria-label="Nhập bảng điểm Excel"
+              type="file"
+              accept=".xlsx"
+              disabled={busy || loading || !rows.length}
               onChange={(e) => {
-                setState(e.target.value);
-                setPage(1);
+                if (e.target.files?.[0]) void upload(e.target.files[0]);
+                e.target.value = "";
               }}
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              {Object.entries(states).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <Button variant="outline" disabled={loading} onClick={refresh}>
-          Tải lại
-        </Button>
-      </div>
-      {error ? (
-        <p role="alert" className="rounded bg-red-50 p-4 text-red-800">
-          {error}{" "}
-          <Button variant="outline" onClick={refresh}>
-            Thử lại
-          </Button>
+            />
+          </div>
+          {preview && (
+            <div className="space-y-3">
+              <p>
+                {preview.changed} dòng thay đổi · {preview.unchanged} dòng giữ
+                nguyên
+              </p>
+              <div className="max-h-64 overflow-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr>
+                      <th>Học viên</th>
+                      <th>Môn</th>
+                      <th>Ô thay đổi</th>
+                      <th>Trước</th>
+                      <th>Sau</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.changes.flatMap((r) =>
+                      r.fields.map((f) => (
+                        <tr key={r.registrationId + f.key} className="border-t">
+                          <td className="p-2">{r.studentCode}</td>
+                          <td>{r.courseCode}</td>
+                          <td>{names[f.key]}</td>
+                          <td>{f.before ?? "—"}</td>
+                          <td>{f.after ?? "—"}</td>
+                        </tr>
+                      )),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <Button
+                disabled={busy || !preview.changed}
+                onClick={() => file && void upload(file, true)}
+              >
+                Lưu {preview.changed} dòng thay đổi
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
+      {loading && <p role="status">Đang tải bảng điểm…</p>}
+      {busy && (
+        <p role="status" className="print:hidden">
+          Đang xử lý…
         </p>
-      ) : loading ? (
-        <p role="status">Đang tải dữ liệu SQL...</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          {tab === "grades" ? (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700">
-                <tr>
-                  {[
-                    "Học viên",
-                    "Học phần / lớp",
-                    "Chuyên cần",
-                    "Giữa kỳ",
-                    "Thi",
-                    "Tổng kết / điểm gốc",
-                    "Kết quả",
-                    "Trạng thái",
-                    "Thao tác",
-                  ].map((h) => (
-                    <th key={h} className="p-3">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {list?.data.map((item) => (
-                  <tr key={item.id}>
-                    <td className="p-3">
-                      <strong>{item.studentCode}</strong>
-                      <p>{item.studentName}</p>
-                    </td>
-                    <td className="p-3">
-                      <strong>
-                        {item.courseCode} — {item.courseName}
-                      </strong>
-                      <p className="text-xs text-slate-600">
-                        v{item.courseVersionNo} ·{" "}
-                        {item.classCode || "Chưa liên kết lớp"}
-                        <br />
-                        {item.unitName}
-                      </p>
-                    </td>
-                    <td className="p-3">{item.attendanceScore ?? "—"}</td>
-                    <td className="p-3">{item.midtermScore ?? "—"}</td>
-                    <td className="p-3">{item.examScore ?? "—"}</td>
-                    <td className="p-3 font-semibold">
-                      {item.state === "VOIDED"
-                        ? "Đã hủy"
-                        : (item.totalScore ?? item.grade ?? "—")}
-                    </td>
-                    <td className="p-3">{results[item.resultStatus]}</td>
-                    <td className="p-3">{states[item.state]}</td>
-                    <td className="p-3">
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => view(item)}
-                      >
-                        Chi tiết
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {!list?.data.length && (
-                  <tr>
-                    <td colSpan={9} className="p-10 text-center text-slate-600">
-                      Không có kết quả phù hợp trong phạm vi.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700">
-                <tr>
-                  {[
-                    "Lớp học phần",
-                    "Học phần / phiên bản",
-                    "Đơn vị",
-                    "Học kỳ",
-                    "Trạng thái lớp",
-                    "Thao tác",
-                  ].map((h) => (
-                    <th key={h} className="p-3">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {classes?.data.map((item) => (
-                  <tr key={item.id}>
-                    <td className="p-3 font-semibold">{item.classCode}</td>
-                    <td className="p-3">
-                      {item.courseCode} — {item.courseName} · v
-                      {item.courseVersionNo}
-                    </td>
-                    <td className="p-3">{item.unitName}</td>
-                    <td className="p-3">
-                      {item.academicYear} · {item.semester}
-                    </td>
-                    <td className="p-3">{item.status}</td>
-                    <td className="p-3">
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => openPolicy(item)}
-                      >
-                        Quy tắc chấm điểm
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {!classes?.data.length && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-slate-600">
-                      Chưa có lớp phù hợp trong SQL.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+      )}
+      <section
+        id="grade-print"
+        className="bg-white border rounded-xl overflow-auto"
+      >
+        <div className="p-4 border-b">
+          <h2 className="font-bold">
+            {selected
+              ? `Bảng điểm lớp ${selected.classCode}`
+              : "Chọn khoa, lớp và học kỳ để xem điểm"}
+          </h2>
+          {selected && (
+            <p className="text-sm">
+              {selected.unitName} · {selected.academicYear} · Học kỳ{" "}
+              {selected.semester}
+            </p>
           )}
         </div>
-      )}
-      {!loading &&
-        !error &&
-        pager(tab === "grades" ? list?.meta : classes?.meta, page, setPage)}
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50">
+            <tr>
+              {[
+                "Mã HV",
+                "Học viên",
+                "Môn / lớp học phần",
+                "Chuyên cần",
+                "Giữa kỳ",
+                "Thi",
+                "Tổng / kết quả",
+                "Trạng thái",
+                "",
+              ].map((h, i) => (
+                <th className="p-3" key={i}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr className="border-t" key={r.registrationId}>
+                <td className="p-3">{r.studentCode}</td>
+                <td className="p-3">{r.studentName}</td>
+                <td className="p-3">
+                  {r.courseCode} — {r.courseName}
+                  <p className="text-xs text-slate-500">{r.offeringCode}</p>
+                </td>
+                <td className="p-3">{r.attendanceScore ?? "—"}</td>
+                <td className="p-3">{r.midtermScore ?? "—"}</td>
+                <td className="p-3">{r.examScore ?? "—"}</td>
+                <td className="p-3">
+                  {r.totalScore ?? r.grade ?? "—"}
+                  <p className="text-xs">{r.resultStatus}</p>
+                </td>
+                <td className="p-3 text-xs">
+                  {{
+                    NEW: "Chưa nhập",
+                    DRAFT: "Nháp",
+                    FINALIZED: "Đã chốt",
+                    VOIDED: "Đã hủy",
+                    LEGACY: "Lịch sử",
+                  }[r.state] || r.state}
+                </td>
+                <td className="p-3 print:hidden">
+                  {r.resultId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          setDetail(await gradeService.detail(r.resultId!));
+                          setCommand(null);
+                        } catch (e) {
+                          setError(
+                            e instanceof Error
+                              ? e.message
+                              : "Không đọc được lịch sử.",
+                          );
+                        }
+                      }}
+                    >
+                      Chi tiết
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length && (
+          <p className="p-6 text-center text-slate-500 text-sm">
+            Chưa có dữ liệu trong lựa chọn này.
+          </p>
+        )}
+      </section>
+      <details className="rounded-xl border bg-white p-4">
+        <summary className="cursor-pointer font-semibold text-sm">
+          Kết quả lịch sử chưa gắn lớp / học kỳ ({legacy?.meta.total || 0})
+        </summary>
+        <div id="legacy-print" className="mt-3 space-y-3">
+          <h2 className="font-bold">Bảng điểm lịch sử — trang {legacyPage}</h2>
+          <p className="text-xs text-slate-500">
+            Giữ nguyên dữ liệu cũ, không suy đoán điểm thành phần hoặc tự gán
+            lớp/học kỳ.
+          </p>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr>
+                {[
+                  "Mã HV",
+                  "Học viên",
+                  "Môn",
+                  "Điểm/ký hiệu",
+                  "Kết quả",
+                  "",
+                ].map((h, i) => (
+                  <th className="p-2" key={i}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {legacy?.data.map((r) => (
+                <tr className="border-t" key={r.id}>
+                  <td className="p-2">{r.studentCode}</td>
+                  <td>{r.studentName}</td>
+                  <td>
+                    {r.courseCode} — {r.courseName}
+                  </td>
+                  <td>{r.grade ?? "—"}</td>
+                  <td>{r.resultStatus}</td>
+                  <td className="print:hidden">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        try {
+                          setDetail(await gradeService.detail(r.id));
+                          setCommand(null);
+                        } catch (e) {
+                          setError(
+                            e instanceof Error
+                              ? e.message
+                              : "Không đọc được chi tiết.",
+                          );
+                        }
+                      }}
+                    >
+                      Chi tiết
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-3 mt-3 items-center">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={legacyPage <= 1}
+            onClick={() => setLegacyPage((p) => p - 1)}
+          >
+            Trước
+          </Button>
+          <span className="text-xs">
+            {legacyPage} / {legacy?.meta.totalPages || 1}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={legacyPage >= (legacy?.meta.totalPages || 1)}
+            onClick={() => setLegacyPage((p) => p + 1)}
+          >
+            Sau
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!legacy?.data.length}
+            onClick={() => {
+              setPrintTarget("legacy-print");
+              setTimeout(() => window.print(), 50);
+            }}
+          >
+            In trang điểm lịch sử
+          </Button>
+        </div>
+      </details>
       <Modal
-        isOpen={!!detail && !editor && !action}
+        isOpen={!!policy}
+        onClose={() => setPolicy(null)}
+        title="Quy tắc chấm điểm qua Excel"
+      >
+        {policy && (
+          <PolicyEditor
+            data={policy}
+            onSaved={() => {
+              setPolicy(null);
+              refreshRows();
+            }}
+          />
+        )}
+      </Modal>
+      <Modal
+        isOpen={!!detail}
         onClose={() => {
-          if (!busy) setDetail(null);
+          setDetail(null);
+          setCommand(null);
         }}
-        title="Chi tiết kết quả học tập"
-        size="2xl"
+        title="Chi tiết và lịch sử điểm"
       >
         {detail && (
           <div className="space-y-4 text-sm">
-            <h2 className="text-lg font-semibold">
-              {detail.studentCode} — {detail.studentName}
-            </h2>
-            <p>
-              {detail.courseCode} — {detail.courseName} · v
-              {detail.courseVersionNo}
-              <br />
-              {detail.classCode || "Kết quả cũ chưa liên kết lớp"} ·{" "}
-              {detail.unitName}
-            </p>
-            <p>
-              <strong>
-                {results[detail.resultStatus]} · {states[detail.state]}
-              </strong>{" "}
-              · Lần cập nhật {detail.revision}
-              <br />
-              Điểm tổng kết / điểm gốc:{" "}
-              {detail.state === "VOIDED"
-                ? "Đã hủy, không dùng tính đạt"
-                : (detail.totalScore ?? detail.grade ?? "Chưa có")}
-              <br />
-              Ngày đạt/miễn: {detail.passedDate || "—"}
-            </p>
-            {detail.state === "LEGACY" ? (
-              <p className="rounded bg-slate-50 p-3 text-slate-700">
-                SQL cũ không lưu điểm thành phần, trọng số hoặc ngưỡng đã áp
-                dụng. Hệ thống giữ nguyên điểm/ký hiệu và trạng thái gốc. Điều
-                chỉnh cần căn cứ hồ sơ chính thức, không tự tính lại theo quy
-                tắc hiện tại.
+            <div className="rounded-lg bg-slate-50 p-3 space-y-2">
+              <p className="font-semibold">
+                {detail.studentCode} — {detail.studentName}
               </p>
-            ) : (
               <p>
-                Chuyên cần: {detail.attendanceScore ?? "Chưa nhập"} · Giữa kỳ:{" "}
-                {detail.midtermScore ?? "Chưa nhập"} · Thi:{" "}
-                {detail.examScore ?? "Chưa nhập"}
-                <br />
-                Trọng số SQL: {detail.attendanceWeight}% /{" "}
-                {detail.midtermWeight}% / {detail.examWeight}% · Điểm đạt:{" "}
-                {detail.passingScore}
-                <br />
-                Làm tròn: {detail.decimalPlaces} chữ số · {detail.rounding} · Hồ
-                sơ: {detail.policyReference}
+                {detail.courseCode} — {detail.courseName}
               </p>
-            )}
-            {detailError && (
-              <p role="alert" className="text-red-700">
-                {detailError}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {detail.permissions.canManage && detail.state !== "VOIDED" && (
-                <Button disabled={busy} onClick={() => begin(detail)}>
-                  {detail.state === "LEGACY"
-                    ? "Điều chỉnh theo hồ sơ"
-                    : "Cập nhật điểm"}
-                </Button>
-              )}
-              {detail.permissions.canManage && detail.state === "DRAFT" && (
-                <Button
-                  disabled={
-                    busy ||
-                    detail.classStatus !== "COMPLETED" ||
-                    detail.totalScore === null
-                  }
-                  onClick={() => beginAction("chot")}
-                >
-                  Chốt điểm
-                </Button>
-              )}
-              {detail.permissions.canManage &&
-                ["DRAFT", "FINALIZED"].includes(detail.state) && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => beginAction("huy")}
-                  >
-                    Hủy hiệu lực điểm
-                  </Button>
+              <p>
+                Trạng thái điểm:{" "}
+                <strong>{gradeStates[detail.state] || detail.state}</strong>
+                {detail.classCode && (
+                  <>
+                    {" "}
+                    · Lớp học phần {detail.classCode}:{" "}
+                    <strong>
+                      {classStates[detail.classStatus || ""] || "Chưa xác định"}
+                    </strong>
+                  </>
                 )}
-              {detail.permissions.canManage && detail.state === "VOIDED" && (
-                <Button disabled={busy} onClick={() => beginAction("mo-lai")}>
-                  Mở lại nhập điểm
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => view(detail)}
-              >
-                Tải lại chi tiết
-              </Button>
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                {[
+                  ["Chuyên cần", detail.attendanceScore],
+                  ["Giữa kỳ", detail.midtermScore],
+                  ["Thi", detail.examScore],
+                  ["Tổng điểm", detail.totalScore ?? detail.grade],
+                ].map(([label, value]) => (
+                  <p key={String(label)}>
+                    {label}: <strong>{value ?? "Chưa có"}</strong>
+                  </p>
+                ))}
+              </div>
             </div>
-            {detail.state === "DRAFT" && (
-              <p className="text-slate-600">
-                Nháp chưa tính đạt học phần. Chỉ chốt khi lớp COMPLETED và đủ
-                thành phần có trọng số.
-              </p>
+            {canManage && detail.permissions.canManage && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ...(detail.state === "DRAFT" ? ["chot" as const] : []),
+                    ...(["DRAFT", "FINALIZED"].includes(detail.state)
+                      ? ["huy" as const]
+                      : []),
+                    ...(detail.state === "VOIDED" ? ["mo-lai" as const] : []),
+                  ].map((action) => (
+                    <Button
+                      key={action}
+                      variant={command === action ? "primary" : "outline"}
+                      disabled={!detail.availableActions?.[action].allowed}
+                      title={
+                        detail.availableActions?.[action].reason || undefined
+                      }
+                      onClick={() =>
+                        setCommand(command === action ? null : action)
+                      }
+                    >
+                      {commandInfo[action].label}
+                    </Button>
+                  ))}
+                </div>
+                {detail.state === "DRAFT" &&
+                  !detail.availableActions?.chot.allowed && (
+                    <p
+                      role="status"
+                      className="rounded-lg bg-amber-50 p-3 text-amber-900"
+                    >
+                      {detail.availableActions?.chot.reason ||
+                        "Tải lại dữ liệu để kiểm tra điều kiện chốt điểm."}{" "}
+                      Bạn vẫn có thể lưu và sửa điểm nháp bằng Excel ở Bước 3.
+                    </p>
+                  )}
+                {detail.state === "VOIDED" &&
+                  !detail.availableActions?.["mo-lai"].allowed && (
+                    <p role="status" className="text-amber-800">
+                      {detail.availableActions?.["mo-lai"].reason ||
+                        "Tải lại dữ liệu để kiểm tra điều kiện mở lại."}
+                    </p>
+                  )}
+              </div>
             )}
-            <h3 className="font-semibold">Lịch sử điều chỉnh</h3>
-            {!detail.history.length && (
-              <p>
-                Chưa có điều chỉnh qua module này; dữ liệu gốc được giữ nguyên.
-              </p>
+            {canManage &&
+              detail.permissions.canManage &&
+              detail.state === "LEGACY" && (
+                <LegacyEditor
+                  detail={detail}
+                  onSaved={() => {
+                    setDetail(null);
+                    refreshRows();
+                  }}
+                />
+              )}
+            {command &&
+              detail.permissions.canManage &&
+              detail.availableActions?.[command].allowed && (
+                <GradeAction
+                  key={command}
+                  detail={detail}
+                  action={command}
+                  onSaved={() => {
+                    setDetail(null);
+                    setCommand(null);
+                    refreshRows();
+                  }}
+                />
+              )}
+            <h3 className="font-semibold">Lịch sử xử lý</h3>
+            {detail.history.length === 0 && (
+              <p className="text-slate-500">Chưa có lịch sử xử lý.</p>
             )}
-            {detail.history.map((h) => (
-              <article
-                key={h.revision}
-                className="space-y-1 border-t border-slate-200 py-3"
-              >
+            {detail.history.map((h, i) => (
+              <div key={i} className="border rounded-lg p-3">
                 <p>
-                  {new Date(h.createdAt).toLocaleString("vi-VN")} ·{" "}
-                  {h.actorName} · {historyLabels[h.action] || h.action} · Lần
-                  cập nhật {h.revision}
+                  {historyLabels[h.action] || h.action} · {h.actorName} ·{" "}
+                  {new Date(h.createdAt).toLocaleString("vi-VN", {
+                    timeZone: "Asia/Bangkok",
+                  })}
                 </p>
                 <p>
-                  {h.note}
-                  <br />
-                  Hồ sơ: {h.reference}
+                  {h.note} · {h.reference}
                 </p>
-                <details>
-                  <summary className="cursor-pointer text-blue-700">
-                    Dữ liệu trước / sau
-                  </summary>
-                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">
-                    {JSON.stringify(
-                      { before: h.oldValue, after: h.newValue },
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </details>
-              </article>
+              </div>
             ))}
           </div>
         )}
       </Modal>
-      <Modal
-        isOpen={!!editor}
-        onClose={() => {
-          if (!busy) setEditor(null);
-        }}
-        title={
-          legacy
-            ? "Điều chỉnh kết quả cũ theo hồ sơ"
-            : editor === "new"
-              ? "Nhập bảng điểm mới"
-              : "Cập nhật điểm học phần"
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #${printTarget},#${printTarget} * {
+            visibility: visible;
+          }
+          #${printTarget} {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            border: 0;
+          }
+          #${printTarget} button {
+            display: none;
+          }
         }
-        size="xl"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setEditor(null)}
-            >
-              Đóng
-            </Button>
-            <Button
-              type="submit"
-              form="grade-form"
-              disabled={
-                busy ||
-                (!legacy &&
-                  (entryPolicyLoading ||
-                    !entryPolicy?.policy ||
-                    !!entryPolicyError))
-              }
-            >
-              {editor === "new" ? "Lưu nháp" : "Lưu điều chỉnh"}
-            </Button>
-          </>
-        }
-      >
-        <form id="grade-form" onSubmit={save} className="space-y-4">
-          {formError && (
-            <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
-              {formError}
-            </p>
-          )}
-          {editor === "new" && (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">
-                Tìm đăng ký học phần
-                <input
-                  aria-label="Tìm đăng ký học phần"
-                  className={ctl}
-                  value={registrationSearch}
-                  maxLength={255}
-                  onChange={(e) => {
-                    setRegistrationSearch(e.target.value);
-                    setRegistrationPage(1);
-                  }}
-                />
-              </label>
-              {registrationError && (
-                <p role="alert" className="text-red-700">
-                  {registrationError}
-                </p>
-              )}
-              <label className="block text-sm font-medium">
-                Học viên / lớp đã đăng ký
-                <select
-                  aria-label="Học viên / lớp đã đăng ký"
-                  className={ctl}
-                  required
-                  disabled={busy || registrationLoading || !!registrationError}
-                  value={registration?.id || ""}
-                  onChange={(e) =>
-                    setRegistration(
-                      registrations?.data.find(
-                        (r) => r.id === e.target.value,
-                      ) || null,
-                    )
-                  }
-                >
-                  <option value="">
-                    {registrationLoading
-                      ? "Đang tải..."
-                      : "Chọn đăng ký thực tế từ SQL"}
-                  </option>
-                  {registration &&
-                    !registrations?.data.some(
-                      (r) => r.id === registration.id,
-                    ) && (
-                      <option value={registration.id}>
-                        {registration.studentCode} — {registration.classCode}
-                      </option>
-                    )}
-                  {registrations?.data.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.studentCode} — {r.studentName} — {r.classCode} —{" "}
-                      {r.courseCode}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {!registrationLoading &&
-                !registrations?.data.length &&
-                !registrationError && (
-                  <p className="text-sm text-slate-600">
-                    Không có đăng ký phù hợp chưa nhập điểm. Đăng ký hủy/rút
-                    hoặc lớp đã hủy không được chọn.
-                  </p>
-                )}
-              {pager(
-                registrations?.meta,
-                registrationPage,
-                setRegistrationPage,
-              )}
-              {registration && (
-                <p className="rounded bg-slate-50 p-3 text-sm">
-                  {registration.studentCode} — {registration.studentName}
-                  <br />
-                  {registration.courseCode} — {registration.courseName} · v
-                  {registration.courseVersionNo}
-                  <br />
-                  {registration.classCode} · {registration.unitName}
-                </p>
-              )}
-            </div>
-          )}
-          {editor && editor !== "new" && (
-            <p className="text-sm">
-              {editor.studentCode} — {editor.studentName}
-              <br />
-              {editor.courseCode} — {editor.courseName} ·{" "}
-              {editor.classCode || "Kết quả cũ"}
-              <br />
-              Không thay đổi học viên, lớp hoặc phiên bản học phần khi sửa điểm.
-            </p>
-          )}
-          {legacy ? (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium">
-                Kết quả theo hồ sơ
-                <select
-                  aria-label="Kết quả theo hồ sơ"
-                  className={ctl}
-                  value={legacyStatus}
-                  disabled={busy}
-                  onChange={(e) => {
-                    const status = e.target.value as ResultStatus;
-                    setLegacyStatus(status);
-                    if (status === "INCOMPLETE") setLegacyGrade("");
-                    if (!["PASSED", "EXEMPTED"].includes(status))
-                      setPassedDate("");
-                  }}
-                >
-                  {Object.entries(results).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium">
-                Điểm / ký hiệu chính thức
-                <input
-                  aria-label="Điểm / ký hiệu chính thức"
-                  className={ctl}
-                  maxLength={20}
-                  value={legacyGrade}
-                  disabled={busy || legacyStatus === "INCOMPLETE"}
-                  required={["PASSED", "FAILED"].includes(legacyStatus)}
-                  onChange={(e) => setLegacyGrade(e.target.value)}
-                />
-              </label>
-              {["PASSED", "EXEMPTED"].includes(legacyStatus) && (
-                <label className="block text-sm font-medium">
-                  Ngày đạt / miễn theo hồ sơ
-                  <input
-                    aria-label="Ngày đạt / miễn theo hồ sơ"
-                    className={ctl}
-                    type="date"
-                    required
-                    value={passedDate}
-                    disabled={busy}
-                    onChange={(e) => setPassedDate(e.target.value)}
-                  />
-                </label>
-              )}
-              <p className="text-sm text-slate-600">
-                Không suy kết quả cũ từ ngưỡng hiện tại. Người nhập chịu trách
-                nhiệm đối chiếu kết quả, điểm và ngày đạt theo hồ sơ.
-              </p>
-            </div>
-          ) : (
-            <>
-              {entryPolicyLoading && <p>Đang tải quy tắc SQL...</p>}
-              {entryPolicyError && (
-                <p role="alert" className="text-red-700">
-                  {entryPolicyError}
-                </p>
-              )}
-              {registration &&
-                !entryPolicyLoading &&
-                entryPolicy &&
-                !entryPolicy.policy && (
-                  <p
-                    role="alert"
-                    className="rounded bg-amber-50 p-3 text-amber-900"
-                  >
-                    Lớp chưa có quy tắc. Đóng form, mở tab “Lớp & quy tắc chấm
-                    điểm” và lưu trọng số/ngưỡng theo hồ sơ trước.
-                  </p>
-                )}
-              {entryPolicy?.policy && (
-                <p className="rounded bg-slate-50 p-3 text-sm">
-                  Trọng số SQL: {entryPolicy.policy.attendanceWeight}% /{" "}
-                  {entryPolicy.policy.midtermWeight}% /{" "}
-                  {entryPolicy.policy.examWeight}% · Điểm đạt{" "}
-                  {entryPolicy.policy.passingScore}
-                  <br />
-                  Làm tròn {entryPolicy.policy.decimalPlaces} chữ số ·{" "}
-                  {entryPolicy.policy.rounding}
-                </p>
-              )}
-              <div className="grid gap-3 md:grid-cols-3">
-                {(
-                  ["attendanceScore", "midtermScore", "examScore"] as const
-                ).map((key) => (
-                  <label key={key} className="block text-sm font-medium">
-                    {scoreNames[key]}
-                    <input
-                      aria-label={scoreNames[key]}
-                      type="number"
-                      min={0}
-                      max={10}
-                      step="0.01"
-                      className={ctl}
-                      value={scores[key]}
-                      disabled={busy}
-                      onChange={(e) =>
-                        setScores({ ...scores, [key]: e.target.value })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-              <p className="text-sm text-slate-600">
-                Chưa có điểm thì để trống; 0 là điểm thật. Backend tính tổng
-                theo SQL. Thành phần trọng số 0 không bắt buộc nhập.
-              </p>
-            </>
-          )}
-          <label className="block text-sm font-medium">
-            Số hồ sơ đối chiếu
-            <input
-              aria-label="Số hồ sơ đối chiếu"
-              className={ctl}
-              required
-              maxLength={255}
-              value={reference}
-              disabled={busy}
-              onChange={(e) => setReference(e.target.value)}
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Nội dung / lý do ghi điểm
-            <textarea
-              aria-label="Nội dung / lý do ghi điểm"
-              className={ctl}
-              required
-              minLength={10}
-              maxLength={1000}
-              rows={3}
-              value={note}
-              disabled={busy}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </label>
-        </form>
-      </Modal>
-      <Modal
-        isOpen={!!policyModal}
-        onClose={() => {
-          if (!busy) setPolicyModal(null);
-        }}
-        title="Quy tắc chấm điểm lớp học phần"
-        size="xl"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setPolicyModal(null)}
-            >
-              Đóng
-            </Button>
-            {policyModal?.permissions.canManage && !policyModal.frozen && (
-              <Button type="submit" form="policy-form" disabled={busy}>
-                Lưu quy tắc SQL
-              </Button>
-            )}
-          </>
-        }
-      >
-        {policyModal && (
-          <form id="policy-form" onSubmit={savePolicy} className="space-y-4">
-            <p className="font-medium">
-              {policyModal.offering.classCode} —{" "}
-              {policyModal.offering.courseName}
-              <br />
-              {policyModal.offering.unitName}
-            </p>
-            {policyError && (
-              <p role="alert" className="text-red-700">
-                {policyError}
-              </p>
-            )}
-            {policyModal.frozen && (
-              <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">
-                Lớp đã có bảng điểm. Quy tắc được giữ cố định để bảo toàn kết
-                quả đã ghi.
-              </p>
-            )}
-            <p className="text-sm text-slate-600">
-              Tham số điểm đạt hiện có trong SQL hệ thống:{" "}
-              {policyModal.configuredPassingScore ?? "Chưa cấu hình"}. Nhập quy
-              tắc áp dụng thực tế cho lớp và hồ sơ làm căn cứ; không có trọng số
-              mặc định.
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              {(
-                ["attendanceWeight", "midtermWeight", "examWeight"] as const
-              ).map((key) => (
-                <label key={key} className="block text-sm font-medium">
-                  {
-                    {
-                      attendanceWeight: "Trọng số chuyên cần (%)",
-                      midtermWeight: "Trọng số giữa kỳ (%)",
-                      examWeight: "Trọng số thi (%)",
-                    }[key]
-                  }
-                  <input
-                    aria-label={key}
-                    type="number"
-                    required
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    className={ctl}
-                    value={policyForm[key]}
-                    disabled={policyDisabled}
-                    onChange={(e) =>
-                      setPolicyForm({ ...policyForm, [key]: e.target.value })
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-            <p className="text-sm text-slate-600">
-              Tổng trọng số phải bằng 100%.
-            </p>
-            <label className="block text-sm font-medium">
-              Điểm đạt của lớp
-              <input
-                aria-label="Điểm đạt của lớp"
-                type="number"
-                required
-                min={0.01}
-                max={10}
-                step="0.01"
-                className={ctl}
-                value={policyForm.passingScore}
-                disabled={policyDisabled}
-                onChange={(e) =>
-                  setPolicyForm({ ...policyForm, passingScore: e.target.value })
-                }
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block text-sm font-medium">
-                Số chữ số thập phân
-                <select
-                  aria-label="Số chữ số thập phân"
-                  className={ctl}
-                  required
-                  value={policyForm.decimalPlaces}
-                  disabled={policyDisabled}
-                  onChange={(e) =>
-                    setPolicyForm({
-                      ...policyForm,
-                      decimalPlaces: e.target.value,
-                    })
-                  }
-                >
-                  <option value="">Chọn theo quy định</option>
-                  <option value="0">0</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                </select>
-              </label>
-              <label className="block text-sm font-medium">
-                Cách làm tròn
-                <select
-                  aria-label="Cách làm tròn"
-                  className={ctl}
-                  required
-                  value={policyForm.rounding}
-                  disabled={policyDisabled}
-                  onChange={(e) =>
-                    setPolicyForm({ ...policyForm, rounding: e.target.value })
-                  }
-                >
-                  <option value="">Chọn theo quy định</option>
-                  <option value="HALF_UP">Từ 5 làm tròn lên</option>
-                  <option value="TRUNCATE">Cắt phần dư</option>
-                </select>
-              </label>
-            </div>
-            <label className="block text-sm font-medium">
-              Số hồ sơ / quy định áp dụng
-              <input
-                aria-label="Số hồ sơ / quy định áp dụng"
-                className={ctl}
-                required
-                maxLength={255}
-                value={policyForm.reference}
-                disabled={policyDisabled}
-                onChange={(e) =>
-                  setPolicyForm({ ...policyForm, reference: e.target.value })
-                }
-              />
-            </label>
-          </form>
-        )}
-      </Modal>
-      <Modal
-        isOpen={!!action}
-        onClose={() => {
-          if (!busy) setAction(null);
-        }}
-        title={
-          action === "chot"
-            ? "Chốt kết quả học phần"
-            : action === "huy"
-              ? "Hủy hiệu lực điểm"
-              : "Mở lại nhập điểm"
-        }
-        footer={
-          <>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setAction(null)}
-            >
-              Đóng
-            </Button>
-            <Button form="grade-action" type="submit" disabled={busy}>
-              Xác nhận
-            </Button>
-          </>
-        }
-      >
-        <form id="grade-action" onSubmit={submitAction} className="space-y-4">
-          <p>
-            {detail?.studentCode} — {detail?.courseName}
-          </p>
-          {actionError && (
-            <p role="alert" className="text-red-700">
-              {actionError}
-            </p>
-          )}
-          <p className="text-sm text-slate-600">
-            {action === "chot"
-              ? "Chỉ điểm đã chốt mới cập nhật kết quả đạt/chưa đạt và điều kiện tiên quyết."
-              : action === "huy"
-                ? "Kết quả sẽ chuyển chưa hoàn tất và ngừng tính đạt. Toàn bộ lịch sử được giữ."
-                : "Bảng điểm trở lại nháp, các ô điểm được để trống để nhập lại; lịch sử cũ vẫn được giữ."}
-          </p>
-          <label className="block text-sm font-medium">
-            Số hồ sơ
-            <input
-              aria-label="Số hồ sơ"
-              className={ctl}
-              required
-              maxLength={255}
-              value={actionReference}
-              disabled={busy}
-              onChange={(e) => setActionReference(e.target.value)}
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Lý do / nội dung xác nhận
-            <textarea
-              aria-label="Lý do / nội dung xác nhận"
-              className={ctl}
-              required
-              minLength={10}
-              maxLength={1000}
-              rows={3}
-              value={actionNote}
-              disabled={busy}
-              onChange={(e) => setActionNote(e.target.value)}
-            />
-          </label>
-        </form>
-      </Modal>
+      `}</style>
     </div>
   );
 }

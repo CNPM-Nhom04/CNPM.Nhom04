@@ -10,6 +10,10 @@ import {
   type ProgramPermissions,
 } from "@/lib/services/programService";
 interface Row {
+  sourceUrl?: string | null;
+  sourceMajorCode?: string | null;
+  sourceTotalCredits?: number | null;
+  sourceReadOnly?: boolean;
   id: string;
   programId?: string;
   maCTDT: string;
@@ -44,6 +48,7 @@ export function ProgramList({
 }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState(initialStatus),
+    [level, setLevel] = useState("ALL"),
     [page, setPage] = useState(1),
     [mode, setMode] = useState<"versions" | "unversioned">("versions");
   const [result, setResult] = useState<Result | null>(null),
@@ -72,6 +77,7 @@ export function ProgramList({
           new URLSearchParams({
             searchTerm: search.trim(),
             selectedStatus: status,
+            selectedLevel: level,
             page: String(page),
             limit: "20",
           }),
@@ -102,7 +108,7 @@ export function ProgramList({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, status, page, mode, version]);
+  }, [search, status, level, page, mode, version]);
   return (
     <div className="space-y-6">
       <ProgramFeedback error={error} retry={refresh} />
@@ -140,8 +146,9 @@ export function ProgramList({
         </Button>
       </div>
       <p className="text-sm text-slate-500">
-        Danh sách chỉ gồm dữ liệu trong phạm vi được gán cho tài khoản. Một CTĐT
-        có thể có nhiều phiên bản, mỗi phiên bản là một dòng riêng.
+        Danh mục AGU công khai dùng để tra cứu; dữ liệu nội bộ theo phạm vi tài
+        khoản. Một CTĐT có thể có nhiều phiên bản, mỗi phiên bản là một dòng
+        riêng.
       </p>
       <div className="bg-white p-4 rounded-lg border flex flex-col md:flex-row gap-4 justify-between">
         <Input
@@ -151,6 +158,20 @@ export function ProgramList({
           value={search}
           onChange={(event) => {
             setSearch(event.target.value);
+            setPage(1);
+            setLoading(true);
+          }}
+        />
+        <Select
+          aria-label="Bậc đào tạo"
+          options={[
+            { label: "Tất cả bậc đào tạo", value: "ALL" },
+            { label: "Thạc sĩ", value: "MASTER" },
+            { label: "Tiến sĩ", value: "DOCTOR" },
+          ]}
+          value={level}
+          onChange={(event) => {
+            setLevel(event.target.value);
             setPage(1);
             setLoading(true);
           }}
@@ -199,7 +220,7 @@ export function ProgramList({
               result?.data.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50">
                   <td className="px-5 py-4">
-                    <strong>{item.maCTDT}</strong>
+                    <strong>{item.sourceMajorCode || item.maCTDT}</strong>
                     <p className="text-xs text-blue-700">
                       {mode === "versions"
                         ? item.maPhienBan
@@ -223,9 +244,13 @@ export function ProgramList({
                     )}
                   </td>
                   <td className="px-5 py-4 font-semibold text-blue-600">
-                    {item.tongTinChiYeuCau != null
-                      ? item.tongTinChiYeuCau + " TC"
-                      : "Chưa có cấu trúc"}
+                    {item.sourceUrl
+                      ? item.sourceTotalCredits != null
+                        ? item.sourceTotalCredits + " TC"
+                        : "Xem tài liệu AGU"
+                      : item.tongTinChiYeuCau != null
+                        ? item.tongTinChiYeuCau + " TC"
+                        : "Chưa có cấu trúc"}
                   </td>
                   <td className="px-5 py-4">
                     <Badge
@@ -243,12 +268,16 @@ export function ProgramList({
                     >
                       {mode === "unversioned"
                         ? "Chưa có phiên bản"
-                        : item.statusLabel}
+                        : item.sourceUrl
+                          ? "Công bố trên AGU"
+                          : item.statusLabel}
                     </Badge>
                   </td>
                   <td className="px-5 py-4">
                     {mode === "unversioned" ? (
-                      result.permissions.canEdit && item.status === "ACTIVE" ? (
+                      !item.sourceReadOnly &&
+                      result.permissions.canEdit &&
+                      item.status === "ACTIVE" ? (
                         <Link
                           href={`/dashboard/chuong-trinh-dao-tao/tao-moi?programId=${item.id}`}
                         >
@@ -256,41 +285,44 @@ export function ProgramList({
                         </Link>
                       ) : (
                         <span className="text-xs text-slate-500">
-                          Chưa có phiên bản để xem cấu trúc
+                          Chưa có phiên bản được công bố
                         </span>
                       )
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {result.permissions.canEdit && item.programId && (
-                          <Link
-                            href={
-                              ["DRAFT", "RETURNED"].includes(item.status)
-                                ? `/dashboard/chuong-trinh-dao-tao/tao-moi?edit=${item.id}`
-                                : `/dashboard/chuong-trinh-dao-tao/${item.id}/build`
-                            }
-                          >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={
-                                !["DRAFT", "RETURNED"].includes(item.status)
-                              }
-                              title={
-                                !["DRAFT", "RETURNED"].includes(item.status)
-                                  ? "Chỉ sửa phiên bản bản nháp hoặc yêu cầu sửa"
-                                  : undefined
+                        {result.permissions.canEdit &&
+                          !item.sourceReadOnly &&
+                          item.programId && (
+                            <Link
+                              href={
+                                ["DRAFT", "RETURNED"].includes(item.status)
+                                  ? `/dashboard/chuong-trinh-dao-tao/tao-moi?edit=${item.id}`
+                                  : `/dashboard/chuong-trinh-dao-tao/${item.id}/build`
                               }
                             >
-                              Sửa phiên bản
-                            </Button>
-                          </Link>
-                        )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={
+                                  !["DRAFT", "RETURNED"].includes(item.status)
+                                }
+                                title={
+                                  !["DRAFT", "RETURNED"].includes(item.status)
+                                    ? "Chỉ sửa phiên bản bản nháp hoặc yêu cầu sửa"
+                                    : undefined
+                                }
+                              >
+                                Sửa phiên bản
+                              </Button>
+                            </Link>
+                          )}
                         <Link
                           href={`/dashboard/chuong-trinh-dao-tao/${item.id}/build`}
                         >
                           <Button variant="outline" size="sm">
                             <Layers className="h-3.5 w-3.5 mr-1" />
-                            {["DRAFT", "RETURNED"].includes(item.status) &&
+                            {!item.sourceReadOnly &&
+                            ["DRAFT", "RETURNED"].includes(item.status) &&
                             result.permissions.canEdit
                               ? "Xây dựng / Chi tiết"
                               : "Xem đầy đủ"}

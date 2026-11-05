@@ -1,3 +1,4 @@
+import { addExampleSheet } from "../../../core/excel/examples";
 import { Workbook } from "exceljs";
 import {
   parseStudentAccounts,
@@ -12,6 +13,21 @@ async function file(rows: unknown[][]) {
   return Buffer.from(await b.xlsx.writeBuffer());
 }
 describe("Student account Excel boundary", () => {
+  it("never imports demonstration students from the final example sheet", async () => {
+    const book = new Workbook(),
+      sheet = book.addWorksheet("Hoc vien");
+    sheet.addRow(STUDENT_HEADERS);
+    sheet.addRow(["REAL001", "Nguyễn Văn An", "an@example.com", "real001"]);
+    addExampleSheet(book, sheet, [
+      ["VD_HV_001", "Nguyễn Văn Minh", "minh.vidu@example.com", "vidu001"],
+    ]);
+    const parsed = await parseStudentAccounts(
+      Buffer.from(await book.xlsx.writeBuffer()),
+      200,
+    );
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].studentCode).toBe("REAL001");
+  });
   it("preserves leading zeros and derives a normalized username without inventing an email", async () => {
     const [row] = await parseStudentAccounts(
       await file([["00123", " Nguyễn Văn An ", "AN@example.com", ""]]),
