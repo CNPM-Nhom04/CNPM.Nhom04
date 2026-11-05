@@ -104,8 +104,25 @@ async function check(r: Response) {
   }
   return r;
 }
+type ExcelOnlyFormProps = FormHTMLAttributes<HTMLFormElement> & {
+  resource?: string;
+  baseId?: string;
+  onImported?: (result: RecordsResult) => void;
+  recordLabel?: string;
+  recordKey?: string;
+  heading?: string;
+  description?: string;
+  templateLabel?: string;
+  submitLabel?: string;
+  downloadFilename?: string;
+  showDependentStep?: boolean;
+};
+// A new record gets fresh upload/preview state, without an effect that resets state.
+export function ExcelOnlyForm(props: ExcelOnlyFormProps) {
+  return <ExcelOnlyFormContent key={props.recordKey ?? ""} {...props} />;
+}
 // All fields retain their original React state and domain validation; Excel is the editing surface.
-export function ExcelOnlyForm({
+function ExcelOnlyFormContent({
   children,
   onSubmit,
   id,
@@ -121,19 +138,7 @@ export function ExcelOnlyForm({
   downloadFilename = "Mau_du_lieu.xlsx",
   showDependentStep = true,
   ...props
-}: FormHTMLAttributes<HTMLFormElement> & {
-  resource?: string;
-  baseId?: string;
-  onImported?: (result: RecordsResult) => void;
-  recordLabel?: string;
-  recordKey?: string;
-  heading?: string;
-  description?: string;
-  templateLabel?: string;
-  submitLabel?: string;
-  downloadFilename?: string;
-  showDependentStep?: boolean;
-}) {
+}: ExcelOnlyFormProps) {
   const generated = useId();
   const formId = id || `excel-${generated.replaceAll(":", "")}`;
   const form = useRef<HTMLFormElement>(null),
@@ -176,12 +181,6 @@ export function ExcelOnlyForm({
       });
     };
   }, [formId]);
-  useEffect(() => {
-    setUploaded(null);
-    setChanges([]);
-    setError("");
-    baseline.current = [];
-  }, [recordKey]);
   async function template() {
     if (!fieldsRoot.current) return;
     setBusy(true);

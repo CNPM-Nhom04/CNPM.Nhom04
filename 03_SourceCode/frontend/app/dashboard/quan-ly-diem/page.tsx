@@ -469,13 +469,12 @@ export default function GradesPage() {
   useEffect(() => {
     if (!classId || !termId) return;
     const c = new AbortController();
-    setLoading(true);
-    setRows([]);
-    setError("");
     request<Row[]>("/excel/rows?" + new URLSearchParams({ classId, termId }), {
       signal: c.signal,
     })
-      .then(setRows)
+      .then((data) => {
+        if (!c.signal.aborted) setRows(data);
+      })
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);
       })
@@ -510,7 +509,14 @@ export default function GradesPage() {
   const selected = options.find(
     (o) => o.classId === classId && o.termId === termId,
   );
+  function refreshRows() {
+    setLoading(Boolean(classId && termId));
+    setRows([]);
+    setError("");
+    setVersion((v) => v + 1);
+  }
   function reset() {
+    setLoading(false);
     setFile(null);
     setPreview(null);
     setRows([]);
@@ -537,7 +543,7 @@ export default function GradesPage() {
         );
         setPreview(null);
         setFile(null);
-        setVersion((v) => v + 1);
+        refreshRows();
       } else {
         setFile(selectedFile);
         setPreview(d);
@@ -651,6 +657,7 @@ export default function GradesPage() {
             onChange={(e) => {
               setTermId(e.target.value);
               reset();
+              setLoading(Boolean(classId && e.target.value));
             }}
           >
             <option value="">Chọn học kỳ</option>
@@ -676,7 +683,7 @@ export default function GradesPage() {
             );
             setFile(null);
             setPreview(null);
-            setVersion((v) => v + 1);
+            refreshRows();
           }}
           onPolicy={async (id) => {
             try {
@@ -976,7 +983,7 @@ export default function GradesPage() {
             data={policy}
             onSaved={() => {
               setPolicy(null);
-              setVersion((v) => v + 1);
+              refreshRows();
             }}
           />
         )}
@@ -1076,7 +1083,7 @@ export default function GradesPage() {
                   detail={detail}
                   onSaved={() => {
                     setDetail(null);
-                    setVersion((v) => v + 1);
+                    refreshRows();
                   }}
                 />
               )}
@@ -1090,7 +1097,7 @@ export default function GradesPage() {
                   onSaved={() => {
                     setDetail(null);
                     setCommand(null);
-                    setVersion((v) => v + 1);
+                    refreshRows();
                   }}
                 />
               )}

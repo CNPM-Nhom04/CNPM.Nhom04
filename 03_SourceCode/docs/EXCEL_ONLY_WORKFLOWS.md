@@ -63,7 +63,7 @@ Migration này đã áp dụng trên DB local trong phiên triển khai. Máy kh
 ## Kiểm tra
 
 - Backend: `npm run build`; `npm test -- --runInBand`.
-- Frontend: `npm run typecheck`; `npm run build`; `node test/program-selection.test.cjs`.
+- Frontend: `npm run typecheck`; `npm run build`; `node test/program-selection.test.mjs`.
 - CSDL thật chỉ đọc: `node test/grade-excel-parity.cjs`, kiểm tra quyền/truy vấn phạm vi và hash kết quả trước/sau.
 - Kiểm tra trình duyệt chưa thực hiện được trong môi trường hiện tại: Chromium có sẵn thiếu `libnspr4.so`. Cần kiểm tra trực quan, thao tác nhập file/những danh sách phụ thuộc và in trên trình duyệt có đủ thư viện. Không ghi điểm thử vào DB đang dùng.
 
