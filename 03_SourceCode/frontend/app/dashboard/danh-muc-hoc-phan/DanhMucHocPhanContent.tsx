@@ -19,6 +19,12 @@ const labels: Record<string, string> = {
   RETIRED: "Ngừng dùng",
   DRAFT: "Bản nháp",
 };
+function nextDate(value: string) {
+  const date = new Date(value + "T00:00:00Z");
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Không thể thực hiện yêu cầu.";
 const blankForm = () => ({
@@ -26,7 +32,7 @@ const blankForm = () => ({
   unitId: "",
   courseName: "",
   englishName: "",
-  credits: "",
+  credits: "1",
   theoryHours: "",
   practiceHours: "",
   description: "",
@@ -124,8 +130,19 @@ export default function DanhMucHocPhanContent() {
   async function save(e: FormEvent) {
     e.preventDefault();
     if (!editing || busy) return;
-    setBusy(true);
     setFormError("");
+    const credits = Number(form.credits);
+    if (!Number.isInteger(credits) || credits < 1 || credits > 15) {
+      setFormError("Số tín chỉ phải là số nguyên từ 1 đến 15.");
+      return;
+    }
+    if (form.effectiveTo && form.effectiveTo <= form.effectiveFrom) {
+      setFormError(
+        "Ngày kết thúc hiệu lực phải lớn hơn ngày bắt đầu hiệu lực.",
+      );
+      return;
+    }
+    setBusy(true);
     const input = {
       courseName: form.courseName,
       englishName: form.englishName,
@@ -198,7 +215,7 @@ export default function DanhMucHocPhanContent() {
     options: {
       required?: boolean;
       maxLength?: number;
-      min?: number;
+      min?: number | string;
       max?: number;
       step?: string;
     } = {},
@@ -211,7 +228,28 @@ export default function DanhMucHocPhanContent() {
         className={control}
         value={form[key]}
         disabled={busy}
-        onChange={(e) => set(key, e.target.value)}
+        onChange={(e) => {
+          e.target.setCustomValidity("");
+          if (key === "effectiveFrom") e.target.form?.querySelector<HTMLInputElement>('input[aria-label="Ngày kết thúc hiệu lực"]')?.setCustomValidity("");
+          set(key, e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (key === "credits" && [".", ",", "e", "E", "-", "+"].includes(e.key)) e.preventDefault();
+        }}
+        onInvalid={(e) => {
+          if (key === "credits")
+            e.currentTarget.setCustomValidity(
+              "Số tín chỉ phải là số nguyên từ 1 đến 15.",
+            );
+          if (
+            key === "effectiveTo" &&
+            form.effectiveTo &&
+            form.effectiveTo <= form.effectiveFrom
+          )
+            e.currentTarget.setCustomValidity(
+              "Ngày kết thúc hiệu lực phải lớn hơn ngày bắt đầu hiệu lực.",
+            );
+        }}
         {...options}
       />
     </label>
@@ -497,8 +535,8 @@ export default function DanhMucHocPhanContent() {
                 </h3>
                 <p>{v.englishName || "Chưa nhập tên tiếng Anh"}</p>
                 <p>
-                  {v.credits} tín chỉ · Lý thuyết {v.theoryHours} giờ · Thực
-                  hành {v.practiceHours} giờ
+                  {v.credits} tín chỉ · Lý thuyết {v.theoryHours} tiết · Thực
+                  hành {v.practiceHours} tiết
                 </p>
                 <p>
                   Hiệu lực: {v.effectiveFrom} →{" "}
@@ -559,7 +597,7 @@ export default function DanhMucHocPhanContent() {
                   onChange={(e) => set("unitId", e.target.value)}
                   disabled={busy || !!unitsError}
                 >
-                  <option value="">Chọn đơn vị từ CSDL</option>
+                  <option value="">Chọn khoa / bộ môn quản lý</option>
                   {units
                     .filter((u) => u.status === "ACTIVE")
                     .map((u) => (
@@ -569,6 +607,11 @@ export default function DanhMucHocPhanContent() {
                     ))}
                 </select>
               </label>
+              <p className="text-xs text-slate-500 md:col-span-2">
+                Đơn vị lấy từ CSDL theo phạm vi khoa/bộ môn của tài khoản. Admin
+                quản lý và bổ sung đơn vị tại Danh mục dùng chung / Quản lý
+                Khoa.
+              </p>
             </div>
           ) : (
             <p className="text-sm text-slate-700">
@@ -584,17 +627,17 @@ export default function DanhMucHocPhanContent() {
           <div className="grid gap-4 md:grid-cols-3">
             {input("credits", "Số tín chỉ", "number", {
               required: true,
-              min: 0.01,
-              max: 999.99,
-              step: "0.01",
+              min: 1,
+              max: 15,
+              step: "1",
             })}
-            {input("theoryHours", "Giờ lý thuyết", "number", {
+            {input("theoryHours", "Tiết lý thuyết", "number", {
               required: true,
               min: 0,
               max: 65535,
               step: "1",
             })}
-            {input("practiceHours", "Giờ thực hành", "number", {
+            {input("practiceHours", "Tiết thực hành", "number", {
               required: true,
               min: 0,
               max: 65535,
@@ -605,7 +648,11 @@ export default function DanhMucHocPhanContent() {
             {input("effectiveFrom", "Ngày bắt đầu hiệu lực", "date", {
               required: true,
             })}
-            {input("effectiveTo", "Ngày kết thúc hiệu lực", "date")}
+            {input("effectiveTo", "Ngày kết thúc hiệu lực", "date", {
+              min: form.effectiveFrom
+                ? nextDate(form.effectiveFrom)
+                : undefined,
+            })}
           </div>
           <label className="block space-y-1 text-sm font-medium text-slate-800">
             Mô tả học phần
@@ -621,8 +668,9 @@ export default function DanhMucHocPhanContent() {
           </label>
           <p className="text-sm text-slate-600">
             Lưu ở trạng thái DRAFT. Chỉ kích hoạt khi đã đến ngày hiệu lực; bản
-            mới phải bắt đầu sau bản ACTIVE hiện tại. Không tự quy đổi tín chỉ
-            thành giờ.
+            mới phải bắt đầu sau bản ACTIVE hiện tại. Tín chỉ là số nguyên từ 1
+            đến 15; không tự quy đổi tín chỉ thành tiết. Ngày kết thúc phải sau
+            ngày bắt đầu hiệu lực.
           </p>
         </form>
       </Modal>

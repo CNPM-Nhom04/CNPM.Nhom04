@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useSessionUser } from "@/components/auth/SessionProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save, BookOpen, Award, Clock } from "lucide-react";
 import { Button, Input } from "@/components/ui";
@@ -20,7 +22,7 @@ const empty: ProgramInput = {
   managingUnitId: "",
   majorId: "",
   hinhThucDaoTao: "CHINH_QUY",
-  thoiGianDaoTao: "",
+  thoiGianDaoTao: "0.5 năm",
   khoaTuyenSinh: "",
   tongTinChiYeuCau: 0,
   chuanDauRaTiengAnh: "",
@@ -29,9 +31,17 @@ const empty: ProgramInput = {
   ngayBanHanh: undefined,
   moTa: "",
 };
+function durationNumber(value: string) {
+  const match = /^(\d+(?:[.,]\d{1,2})?)(?:\s*năm)?$/i.exec(value.trim());
+  return match ? match[1].replace(",", ".") : "";
+}
 const fieldClass =
   "w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white";
 export function ProgramForm() {
+  const user = useSessionUser();
+  const canManageMajors =
+    !!user?.roles.includes("ADMIN") &&
+    user.permissions.includes("MASTERDATA_MANAGE");
   const router = useRouter(),
     searchParams = useSearchParams(),
     editId = searchParams.get("edit"),
@@ -39,6 +49,7 @@ export function ProgramForm() {
   const [form, setForm] = useState<ProgramInput>({ ...empty }),
     [options, setOptions] = useState<ProgramOptions | null>(null),
     [record, setRecord] = useState<ProgramRecord | null>(null);
+  const [customLanguage, setCustomLanguage] = useState(false);
   const [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false),
     [error, setError] = useState<Error | null>(null),
@@ -84,13 +95,29 @@ export function ProgramForm() {
       });
     return () => controller.abort();
   }, [editId, baseId, version]);
+  const availableMajors =
+    options?.majors.filter((major) =>
+      major.unitIds.includes(form.managingUnitId),
+    ) || [];
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving || !editable) return;
     setSaving(true);
     setError(null);
     try {
-      const payload = { ...form, ngayBanHanh: form.ngayBanHanh || undefined };
+      const years = durationNumber(form.thoiGianDaoTao);
+      if (
+        form.thoiGianDaoTao.trim() &&
+        (!years || Number(years) < 0.5 || !Number.isInteger(Number(years) * 2))
+      )
+        throw new Error(
+          "Thời gian đào tạo bắt đầu từ 0,5 năm và tăng theo bước 0,5 năm.",
+        );
+      const payload = {
+        ...form,
+        thoiGianDaoTao: years ? `${Number(years)} năm` : "",
+        ngayBanHanh: form.ngayBanHanh || undefined,
+      };
       const item = editId
         ? await programService.update(editId, payload)
         : baseId
@@ -141,9 +168,7 @@ export function ProgramForm() {
         </Button>
         <div>
           <h1 className="text-lg font-bold">
-            {editId
-              ? "Cập nhật thông tin CTĐT"
-              : "Thêm mới Chương trình Đào tạo"}
+            {editId ? "Sửa phiên bản CTĐT" : "Thêm mới Chương trình Đào tạo"}
           </h1>
           <p className="text-xs text-slate-500">
             Thông tin tổng quan, chuẩn đầu ra và căn cứ pháp lý
@@ -213,16 +238,30 @@ export function ProgramForm() {
                       educationLevelId: event.target.value,
                       tongTinChiYeuCau: degree?.minCredits
                         ? Number(degree.minCredits)
-                        : form.tongTinChiYeuCau,
+                        : 0,
                     });
                   }}
                 >
                   <option value="">Chọn bậc đào tạo</option>
-                  {options?.levels.map((level) => (
-                    <option key={level.id} value={level.id}>
-                      {level.name}
-                    </option>
-                  ))}
+                  {record &&
+                    !options?.levels.some(
+                      (level) =>
+                        ["MASTER", "DOCTOR", "PHD"].includes(level.code) &&
+                        level.id === record.educationLevelId,
+                    ) && (
+                      <option value={record.educationLevelId}>
+                        {record.levelName} (CTĐT cũ — giữ nguyên bậc)
+                      </option>
+                    )}
+                  {options?.levels
+                    .filter((level) =>
+                      ["MASTER", "DOCTOR", "PHD"].includes(level.code),
+                    )
+                    .map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -273,6 +312,12 @@ export function ProgramForm() {
                     </option>
                   ))}
                 </select>
+                {options && !options.units.length && (
+                  <p className="text-xs leading-6 text-amber-800">
+                    Tài khoản chưa có đơn vị hoạt động trong phạm vi được cấp.
+                    Nhờ Admin kiểm tra phạm vi dữ liệu.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="major" className="text-xs font-bold">
@@ -281,14 +326,25 @@ export function ProgramForm() {
                 <select
                   id="major"
                   required
-                  disabled={!!editId || !!baseId}
+                  disabled={
+                    !!editId ||
+                    !!baseId ||
+                    !form.managingUnitId ||
+                    !availableMajors.length
+                  }
                   className={fieldClass}
                   value={form.majorId}
                   onChange={(event) =>
                     setForm({ ...form, majorId: event.target.value })
                   }
                 >
-                  <option value="">Chọn ngành</option>
+                  <option value="">
+                    {!form.managingUnitId
+                      ? "Chọn khoa / đơn vị trước"
+                      : !availableMajors.length
+                        ? "Chưa có ngành thuộc đơn vị đã chọn"
+                        : "Chọn ngành"}
+                  </option>
                   {options?.majors
                     .filter((major) =>
                       major.unitIds.includes(form.managingUnitId),
@@ -299,6 +355,38 @@ export function ProgramForm() {
                       </option>
                     ))}
                 </select>
+                {form.managingUnitId && !availableMajors.length && !loading && (
+                  <p role="status" className="text-xs leading-6 text-amber-800">
+                    Đơn vị này chưa có ngành đào tạo đang hoạt động trong CSDL.{" "}
+                    {canManageMajors ? (
+                      <Link
+                        href="/dashboard/admin/nganh-dao-tao"
+                        className="font-semibold underline"
+                      >
+                        Mở Quản lý ngành đào tạo để bổ sung
+                      </Link>
+                    ) : (
+                      "Nhờ Admin vào Ngành đào tạo, thêm ngành và chọn đúng khoa này; sau đó tải lại form."
+                    )}
+                  </p>
+                )}
+                {!editId &&
+                  !baseId &&
+                  form.managingUnitId &&
+                  !availableMajors.length &&
+                  !loading && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setLoading(true);
+                        setVersion((value) => value + 1);
+                      }}
+                    >
+                      Tải lại danh mục
+                    </Button>
+                  )}
               </div>
               {text(
                 "khoaTuyenSinh",
@@ -354,7 +442,30 @@ export function ProgramForm() {
                   <option value="LIEN_KET">Liên kết đào tạo</option>
                 </select>
               </div>
-              {text("thoiGianDaoTao", "Thời gian đào tạo chuẩn", 150)}
+              <div className="space-y-1.5">
+                <label htmlFor="thoiGianDaoTao" className="text-xs font-bold">
+                  Thời gian đào tạo chuẩn
+                </label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="thoiGianDaoTao"
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={durationNumber(form.thoiGianDaoTao)}
+                    onChange={(event) =>
+                      setForm({ ...form, thoiGianDaoTao: event.target.value })
+                    }
+                  />
+                  <span className="shrink-0 text-sm text-slate-700">năm</span>
+                </div>
+                {form.thoiGianDaoTao &&
+                  !durationNumber(form.thoiGianDaoTao) && (
+                    <p className="text-xs text-amber-800">
+                      Dữ liệu cũ: {form.thoiGianDaoTao}. Nhập lại số năm để lưu.
+                    </p>
+                  )}
+              </div>
             </div>
           </section>
           <section className="bg-white rounded-xl border overflow-hidden">
@@ -363,8 +474,66 @@ export function ProgramForm() {
               3. Chuẩn đầu ra & Pháp lý ban hành
             </h2>
             <div className="p-6 grid md:grid-cols-2 gap-5">
-              {text("chuanDauRaTiengAnh", "Chuẩn yêu cầu ngoại ngữ", 500)}
-              {text("chuanDauRaTinHoc", "Chuẩn kỹ năng CNTT", 500)}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="chuanDauRaTiengAnh"
+                  className="text-xs font-bold"
+                >
+                  Đầu ra ngoại ngữ
+                </label>
+                <select
+                  id="chuanDauRaTiengAnh"
+                  className={fieldClass}
+                  value={
+                    customLanguage ? "__CUSTOM__" : form.chuanDauRaTiengAnh
+                  }
+                  onChange={(event) => {
+                    setCustomLanguage(event.target.value === "__CUSTOM__");
+                    setForm({
+                      ...form,
+                      chuanDauRaTiengAnh:
+                        event.target.value === "__CUSTOM__"
+                          ? ""
+                          : event.target.value,
+                    });
+                  }}
+                >
+                  <option value="">Chưa khai báo</option>
+                  {[
+                    ...new Set([
+                      ...(options?.languageRequirements || []),
+                      ...(!customLanguage && form.chuanDauRaTiengAnh
+                        ? [form.chuanDauRaTiengAnh]
+                        : []),
+                    ]),
+                  ].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                  <option value="__CUSTOM__">
+                    Khác — nhập yêu cầu ngoại ngữ
+                  </option>
+                </select>
+                {customLanguage && (
+                  <Input
+                    aria-label="Yêu cầu ngoại ngữ khác"
+                    maxLength={500}
+                    value={form.chuanDauRaTiengAnh}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        chuanDauRaTiengAnh: event.target.value,
+                      })
+                    }
+                  />
+                )}
+                <p className="text-xs text-slate-500">
+                  Lựa chọn lấy từ yêu cầu đã lưu và cấu hình ngoại ngữ trong
+                  CSDL; chọn theo quy định của CTĐT.
+                </p>
+              </div>
+              {text("chuanDauRaTinHoc", "Bằng CNTT (yêu cầu đầu ra)", 500)}
               {text("soQuyetDinhBanHanh", "Số quyết định ban hành", 150)}
               {text("ngayBanHanh", "Ngày ban hành / hiệu lực", 10, "date")}
               <p className="md:col-span-2 text-xs text-slate-500">

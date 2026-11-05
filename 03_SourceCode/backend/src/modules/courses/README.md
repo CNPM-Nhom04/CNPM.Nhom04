@@ -15,7 +15,7 @@ Máy mới vẫn phải import CSDL gốc và chạy các migration của dự �
 | Mã, trạng thái học phần | courses.course_code, courses.status                             |
 | Đơn vị quản lý          | courses.owning_unit_id → organizational_units.id, unit_name     |
 | Tên, tên tiếng Anh      | course_versions.course_name, english_name                       |
-| Tín chỉ, giờ            | course_versions.credits, theory_hours, practice_hours           |
+| Tín chỉ, tiết            | course_versions.credits, theory_hours, practice_hours           |
 | Mô tả, hiệu lực         | course_versions.description, effective_from, effective_to       |
 | Số/trạng thái phiên bản | course_versions.version_no, status                              |
 | Loại bắt buộc/tự chọn   | curriculum_courses.requirement_type, thuộc vị trí trong CTĐT    |
@@ -55,7 +55,7 @@ FBE chưa có học phần. Đây là kết quả SQL, không phải số gán t
 
 ## Luồng nghiệp vụ
 
-1. Thêm: nhập mã, chọn đơn vị thật, nhập tên/tín chỉ/giờ/ngày hiệu lực.
+1. Thêm: nhập mã, chọn đơn vị thật, nhập tên/tín chỉ/tiết/ngày hiệu lực.
    Tạo courses + course_versions v1 DRAFT + audit cùng transaction.
    Mã duy nhất theo collation SQL, kể cả khác hoa/thường.
 2. Tạo bản sửa đổi: giữ mã/đơn vị; tạo DRAFT kế tiếp, giữ nguyên nội dung cũ (BR-12).
@@ -74,8 +74,8 @@ FBE chưa có học phần. Đây là kết quả SQL, không phải số gán t
 5. Liên kết CTĐT: bộ chọn chỉ nhận phiên bản ACTIVE trong thời gian hiệu lực,
    học phần ACTIVE và trong phạm vi. Bản đã xếp vào CTĐT giữ ID cũ khi khóa
    hoặc có bản mới; lưu cấu trúc không tự nâng phiên bản hoặc xóa lịch sử.
-6. Tín chỉ dương DECIMAL(5,2), giờ nguyên 0..65535 theo SQL.
-   Không tự quy đổi tín chỉ thành giờ khi CSDL chưa quy định công thức.
+6. Tín chỉ khi tạo/sửa phải là số nguyên từ 1 đến 15; tiết lý thuyết/thực hành là số nguyên 0..65535. Cột SQL `credits` vẫn giữ DECIMAL để bảo toàn dữ liệu lịch sử.
+   Không tự quy đổi tín chỉ thành tiết khi CSDL chưa quy định công thức.
    Ngày kết thúc không trước ngày bắt đầu.
 
 Không xóa cứng từ giao diện này. Đề cương/đính kèm thuộc module đề cương,
@@ -245,3 +245,13 @@ Không dùng frontend trỏ DB bản sao này làm giao diện thật hằng ng�
   Các bước test giao diện bằng tay ở trên vẫn cần thực hiện.
 
 Xuất Excel danh mục học phần theo bộ lọc/phạm vi: [hướng dẫn](../admin/FACULTIES_README.md#xuất-excel-danh-mục-học-phần).
+
+### Quy tắc form cập nhật 03/11/2026
+
+- Form thêm mới khởi đầu 1 tín chỉ, bước tăng/giảm 1, tối đa 15. Cả tạo học phần và tạo bản sửa đổi đều chặn số lẻ, 0 và số lớn hơn 15 tại API/service.
+- Nhãn dùng **Tiết lý thuyết**, **Tiết thực hành**, giữ tên cột SQL `theory_hours`, `practice_hours` để tương thích dữ liệu cũ. Không tự tính tiết từ tín chỉ.
+- Ngày kết thúc có thể để trống; nếu nhập phải **lớn hơn** ngày bắt đầu. Ngày bằng nhau bị từ chối với thông báo rõ ràng; frontend đặt ngày nhỏ nhất là ngày kế tiếp.
+- Đơn vị quản lý lấy từ SQL theo phạm vi tài khoản; không mở quyền tạo đơn vị mới cho cán bộ đào tạo. Admin bổ sung/sửa khoa/bộ môn ở danh mục quản trị. Không tạo dữ liệu đơn vị giả để làm đầy danh sách.
+- Bản cũ có tín chỉ ngoài 1–15 không tự bị đổi/xóa. Khi tạo bản sửa đổi mới phải nhập đúng quy tắc mới; tham chiếu CTĐT cũ giữ nguyên.
+
+Kiểm thử hai form: `test:program-course-forms-integration` và `test:program-course-forms-browser`, chỉ trên SQL clone `ctdt_major_review_<chuso>` có `MAJOR_TEST_ALLOW_WRITES=1`, cùng backend/frontend test trỏ clone và JWT_SECRET. `MAJOR_TEST_URL` mặc định http://localhost:3101, backend test http://127.0.0.1:3102. Browser dùng Playwright/Chromium, fixture `forms.json` cạnh `MAJOR_BROWSER_FIXTURE` (mặc định `/tmp`); chạy sau integration, xóa fixture/token và clone sau test.

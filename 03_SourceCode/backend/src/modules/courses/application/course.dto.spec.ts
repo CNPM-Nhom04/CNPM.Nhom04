@@ -5,19 +5,29 @@ const valid = {
   unitId: "1",
   courseCode: "TEST101",
   courseName: "Học phần",
-  credits: 0.25,
+  credits: 1,
   theoryHours: 0,
   practiceHours: 1,
   effectiveFrom: "2026-10-30",
 };
 describe("CreateCourseDto SQL boundaries", () => {
-  it("accepts fractional credits and zero lecture hours without converting hours", async () => {
+  it("accepts whole credits and zero theory periods without conversion", async () => {
     expect(
       await validate(plainToInstance(CreateCourseDto, valid)),
     ).toHaveLength(0);
   });
+  it("accepts the upper credit boundary", async () => {
+    expect(
+      await validate(
+        plainToInstance(CreateCourseDto, { ...valid, credits: 15 }),
+      ),
+    ).toHaveLength(0);
+  });
   it.each([
     { credits: 0 },
+    { credits: 0.25 },
+    { credits: 1.5 },
+    { credits: 16 },
     { credits: "3" },
     { credits: null },
     { credits: true },

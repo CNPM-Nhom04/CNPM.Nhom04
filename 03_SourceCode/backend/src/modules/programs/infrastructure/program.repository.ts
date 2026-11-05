@@ -213,7 +213,20 @@ export class MysqlProgramRepository extends ProgramRepository {
        ORDER BY u.unit_name,m.major_name`,
       [actor.id],
     );
-    const units = new Map<string, { id: string; name: string }>();
+    // A unit can exist before its first major is configured. Keep it visible
+    // within GLOBAL/ORG_UNIT scope; MAJOR/PROGRAM units still come only from
+    // the valid scoped pairs above, without expanding authorization.
+    const scopedUnits = await this.db.query(
+      `SELECT CAST(u.id AS CHAR) id,u.unit_name name FROM organizational_units u
+       WHERE u.status='ACTIVE' AND EXISTS(SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
+         us.scope_type='GLOBAL' OR (us.scope_type='ORG_UNIT' AND EXISTS(
+           SELECT 1 FROM organizational_unit_closure oc WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=u.id))))
+       ORDER BY u.unit_name`,
+      [actor.id],
+    );
+    const units = new Map<string, { id: string; name: string }>(
+      scopedUnits.map((unit) => [unit.id, unit]),
+    );
     const majors = new Map<
       string,
       { id: string; name: string; unitIds: string[] }
@@ -228,8 +241,19 @@ export class MysqlProgramRepository extends ProgramRepository {
       major.unitIds.push(row.unitId);
       majors.set(row.majorId, major);
     }
+    const languageRows = await this.db.query(
+      `SELECT DISTINCT d.language_requirement value FROM program_ui_details d
+       JOIN program_versions v ON v.id=d.program_version_id JOIN training_programs p ON p.id=v.program_id
+       WHERE TRIM(COALESCE(d.language_requirement,''))<>'' AND ${SCOPE}
+       UNION SELECT setting_value value FROM system_settings
+       WHERE setting_key IN('training.ngoaiNguBatBuocThacSi','training.ngoaiNguBatBuocTienSi') AND TRIM(setting_value)<>''`,
+      [actor.id],
+    );
     return {
       levels,
+      languageRequirements: [
+        ...new Set<string>(languageRows.map((row) => String(row.value).trim())),
+      ].sort(),
       units: [...units.values()],
       majors: [...majors.values()],
       canCreateProgram:

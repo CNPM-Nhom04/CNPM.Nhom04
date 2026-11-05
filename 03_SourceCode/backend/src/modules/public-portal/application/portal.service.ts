@@ -16,12 +16,12 @@ export class PortalService {
   options() {
     return this.repository.options();
   }
-  programs(q: PortalQuery) {
-    return this.repository.programs(q);
+  programs(q: PortalQuery, viewerId?: string) {
+    return this.repository.programs(q, viewerId);
   }
-  program(id: string) {
+  program(id: string, viewerId?: string) {
     this.id(id);
-    return this.repository.program(id);
+    return this.repository.program(id, viewerId);
   }
   documents(q: PortalQuery, admin = false) {
     return this.repository.documents(q, admin);

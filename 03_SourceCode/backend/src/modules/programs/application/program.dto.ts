@@ -17,6 +17,7 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
+import { normalizeTrainingDuration } from "../domain/program-form-values";
 import { STATUS_LABELS } from "../domain/program";
 const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
@@ -73,7 +74,16 @@ export class ProgramInputDto {
   @ApiProperty()
   @IsIn(["CHINH_QUY", "VUA_LAM_VUA_HOC", "LIEN_KET"])
   hinhThucDaoTao = "CHINH_QUY";
-  @ApiProperty() @IsString() @MaxLength(150) thoiGianDaoTao = "";
+  @ApiProperty({
+    description: "Thời gian từ 0,5 năm, tăng theo bước 0,5 năm",
+  })
+  @Transform(({ value }) => normalizeTrainingDuration(value))
+  @IsString()
+  @MaxLength(150)
+  @Matches(/^(?:|(?:[1-9]\d*(?:\.5)?|0\.5) năm)$/, {
+    message: "Thời gian đào tạo bắt đầu từ 0,5 năm và tăng theo bước 0,5 năm.",
+  })
+  thoiGianDaoTao = "";
   @ApiProperty({ example: "2026 - 2028" })
   @IsString()
   @Matches(/^\d{4}\s*-\s*\d{4}$/)

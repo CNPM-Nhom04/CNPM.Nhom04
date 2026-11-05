@@ -384,3 +384,27 @@ Quyết định/API cũ vẫn dùng chung repository; bổ sung START_REVIEW, re
 Ngày họp không trước ngày gửi/không ở tương lai; chủ tịch và thư ký khác nhau.
 Tăng revision workflow không tự chèn thông tin UI mặc định vào phiên bản legacy.
 Xuất Excel khung CTĐT theo đúng phiên bản/hướng: [hướng dẫn](../admin/FACULTIES_README.md#xuất-excel-khung-ctđt-chi-tiết).
+
+### Form phiên bản cập nhật 03/11/2026
+
+- Trên danh sách, **Sửa phiên bản** mở `tao-moi?edit=<id>` và gọi PUT để sửa đúng phiên bản DRAFT/RETURNED; không tạo thêm phiên bản khi bấm sửa. Bản đã gửi duyệt/ban hành/lưu trữ vẫn khóa theo workflow.
+- Thời gian chuẩn nhập từ 0,5 năm, theo bước 0,5 năm; giao diện hiển thị hậu tố **năm**, lưu `program_ui_details.duration_label` dạng `2 năm` hoặc `1.5 năm`. Chưa khai báo vẫn để trống; dữ liệu cũ không phải số năm sẽ hiện lời nhắc nhập lại khi sửa, không tự đoán/chuyển đổi.
+- Đầu ra ngoại ngữ là danh sách lấy từ các giá trị `program_ui_details.language_requirement` trong phạm vi tài khoản và hai cấu hình SQL `training.ngoaiNguBatBuocThacSi`, `training.ngoaiNguBatBuocTienSi`. Không tự áp dụng ngưỡng; có lựa chọn chưa khai báo hoặc nhập yêu cầu khác theo căn cứ của CTĐT.
+- Đổi nhãn chuẩn CNTT thành **Bằng CNTT (yêu cầu đầu ra)**; vẫn lưu nội dung người dùng nhập tại `program_ui_details.it_requirement`, không ghi đè dữ liệu cũ bằng giá trị mặc định.
+- Không cần migration vì giữ nguyên cột SQL; không sửa tài khoản hay quyền của cán bộ. Form dùng chung nên áp dụng cho mọi tài khoản được cấp quyền tương ứng.
+
+Bổ sung 03/11/2026: form tạo CTĐT chỉ chọn Thạc sĩ/Tiến sĩ; dữ liệu bậc Đại học của CTĐT cũ vẫn hiển thị đúng, không đổi thành Tiến sĩ. Migration `1793743200000-DoctoralEducationLevel.ts` bổ sung `education_levels.DOCTOR` và liên kết với hướng GENERAL có sẵn trong `education_level_tracks`; không tự áp ngưỡng tín chỉ hoặc tỷ lệ tự chọn khi chưa có quy định. Máy khác chạy `npm run migration:run` sau khi lấy code. Thời gian mới mặc định 0,5 năm, dùng min/step 0.5 và backend từ chối giá trị lệch bước như 0,25 hay 1,25 năm.
+
+### Xóa bậc Đại học và CTĐT mẫu (theo xác nhận 03/11/2026)
+
+Migration `1793746800000-RemoveBachelorDemo.ts` xóa bậc BACHELOR, CTĐT mẫu BIT/BBA, phiên bản nháp BIT và cấu trúc phụ thuộc. Giữ nguyên danh mục học phần gốc, người dùng, hồ sơ học viên; liên hệ tuyển sinh giữ nguyên nội dung/snapshot và chỉ bỏ FK bậc Đại học bằng ON DELETE SET NULL.
+
+Migration dừng nếu gặp chương trình Đại học khác BIT/BBA, phiên bản đã gửi duyệt/ban hành hoặc học viên/lớp/hồ sơ nghiệp vụ phụ thuộc. Chỉ trong đợt bảo trì này mới tạm gỡ trigger cấm xóa phiên bản; mọi DML thực hiện trong transaction và trigger luôn được khôi phục. Không tắt khóa ngoại, không mở API xóa phiên bản cho người dùng, không tự tạo lại dữ liệu khi rollback.
+
+`CSDL.sql` là script nền ban đầu; máy mới phải chạy các migration sau khi nhập script/restore database. Dữ liệu hiện hành sau migration chỉ còn bậc Thạc sĩ và Tiến sĩ. Chạy `npm run migration:run` khi cập nhật code; nên sao lưu database trước khi áp dụng migration xóa mẫu. Bản sao lưu riêng của máy phát triển nằm ngoài repository, không đưa lên GitHub.
+
+### Khoa mới chưa có ngành
+
+API options trả khoa/đơn vị ACTIVE trong phạm vi GLOBAL/ORG_UNIT ngay cả khi khoa chưa có ngành. Không dùng INNER JOIN ngành để làm mất khoa mới. Phạm vi MAJOR/PROGRAM vẫn chỉ trả đơn vị trong cặp ngành/CTĐT được cấp, không mở rộng sang khoa khác.
+
+Form yêu cầu chọn khoa trước; nếu khoa chưa có ngành ACTIVE sẽ thông báo nhờ Admin thêm ngành tại **Ngành đào tạo**, chọn đúng đơn vị. Nút **Tải lại danh mục** cập nhật lựa chọn sau khi Admin thêm ngành, giữ các thông tin form tạo mới đang nhập. Không tự tạo ngành giả hoặc dùng ngành của khoa khác để lưu CTĐT.

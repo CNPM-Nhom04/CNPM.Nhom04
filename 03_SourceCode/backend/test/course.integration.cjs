@@ -111,7 +111,7 @@ function input(unitId, extra = {}) {
     courseCode: marker + "_" + ++sequence,
     courseName: "Học phần kiểm thử SQL",
     englishName: "SQL test course",
-    credits: 2.5,
+    credits: 3,
     theoryHours: 15,
     practiceHours: 30,
     description: "Dữ liệu chỉ trên bản sao kiểm thử",
@@ -200,6 +200,9 @@ async function main() {
   await api("", major, 403, input("1"));
   for (const extra of [
     { credits: 0 },
+    { credits: 0.5 },
+    { credits: 1.5 },
+    { credits: 16 },
     { credits: 1000 },
     { credits: 1.001 },
     { credits: "3" },
@@ -230,7 +233,7 @@ async function main() {
   let item = await api("", fit, 201, input("1"));
   same(item.versionStatus, "DRAFT");
   same(item.activeVersionId, null);
-  same(item.credits, 2.5);
+  same(item.credits, 3);
   same(item.versions.length, 1);
   same((await api("/" + item.id, fit)).courseCode, item.courseCode);
   await api(
@@ -267,7 +270,7 @@ async function main() {
   );
   same(revised.versionNo, 2);
   same(revised.activeVersionId, firstId);
-  same(revised.activeCredits, 2.5);
+  same(revised.activeCredits, 3);
   await api("/" + item.id + "/phien-ban", fit, 409, version(item));
   revised = await api(
     "/" + item.id + "/phien-ban/" + revised.latestVersionId + "/kich-hoat",
@@ -277,7 +280,7 @@ async function main() {
   );
   same(revised.activeCredits, 4);
   same(revised.versions[1].status, "RETIRED");
-  same(revised.versions[1].credits, 2.5);
+  same(revised.versions[1].credits, 3);
   same(revised.versions[1].effectiveTo, day(-1));
   const future = await api("", fit, 201, input("1", { effectiveFrom: day(1) }));
   await api(
@@ -388,7 +391,9 @@ async function main() {
     "/" + existing.id + "/phien-ban",
     fit,
     201,
-    version(original, { credits: original.credits + 0.5 }),
+    version(original, {
+      credits: original.credits < 15 ? Math.floor(original.credits) + 1 : 15,
+    }),
   );
   await api(
     "/" + existing.id + "/phien-ban/" + changed.latestVersionId + "/kich-hoat",

@@ -69,4 +69,17 @@ describe("Public portal input boundaries", () => {
         .length,
     ).toBeGreaterThan(0);
   });
+  it("only accepts postgraduate catalog sections", async () => {
+    for (const levelCode of ["MASTER", "DOCTOR"])
+      expect(
+        await validate(plainToInstance(PortalQueryDto, { levelCode })),
+      ).toHaveLength(0);
+    expect(
+      (
+        await validate(
+          plainToInstance(PortalQueryDto, { levelCode: "BACHELOR" }),
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+  });
 });

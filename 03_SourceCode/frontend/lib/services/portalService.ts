@@ -2,7 +2,13 @@ export interface PublicOptions {
   levels: { id: string; code: string; name: string }[];
   majors: { id: string; code: string; name: string; unitName: string }[];
 }
+export interface PublicCatalogView {
+  mode: "PUBLIC" | "FACULTY" | "ADMIN_ALL" | "UNASSIGNED";
+  facultyId: string | null;
+  facultyName: string | null;
+}
 export interface PublicPage<T> {
+  view?: PublicCatalogView;
   data: T[];
   meta: { page: number; limit: number; total: number; totalPages: number };
 }
@@ -13,6 +19,7 @@ export interface PublicProgram {
   name: string;
   cohortYear: number;
   levelName: string;
+  levelCode: string;
   levelId: string;
   majorName: string;
   unitName: string;

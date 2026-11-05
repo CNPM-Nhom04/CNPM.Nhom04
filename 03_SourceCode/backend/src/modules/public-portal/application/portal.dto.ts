@@ -23,6 +23,7 @@ export class PortalQueryDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 12;
   @IsOptional() @IsString() @Transform(trim) @MaxLength(255) search?: string;
   @IsOptional() @Matches(/^[1-9]\d{0,19}$/) levelId?: string;
+  @IsOptional() @IsIn(["MASTER", "DOCTOR"]) levelCode?: "MASTER" | "DOCTOR";
   @IsOptional()
   @IsIn(["ALL", "REGULATION", "ADMISSION", "GUIDE"])
   category?: string;

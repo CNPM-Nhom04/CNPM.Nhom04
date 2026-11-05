@@ -4,7 +4,6 @@ import {
   IsDateString,
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -57,10 +56,14 @@ export class CourseVersionDto {
   @Transform(trim)
   @MaxLength(255)
   englishName?: string;
-  @ApiProperty({ minimum: 0.01, maximum: 999.99 })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  @Max(999.99)
+  @ApiProperty({
+    minimum: 1,
+    maximum: 15,
+    description: "Số tín chỉ nguyên từ 1 đến 15",
+  })
+  @IsInt({ message: "Số tín chỉ phải là số nguyên từ 1 đến 15." })
+  @Min(1, { message: "Số tín chỉ phải từ 1 trở lên." })
+  @Max(15, { message: "Số tín chỉ không được lớn hơn 15." })
   credits: number;
   @ApiProperty({ minimum: 0, maximum: 65535 })
   @IsInt()

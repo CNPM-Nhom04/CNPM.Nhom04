@@ -263,10 +263,25 @@ export function ProgramList({
                       <div className="flex flex-wrap gap-2">
                         {result.permissions.canEdit && item.programId && (
                           <Link
-                            href={`/dashboard/chuong-trinh-dao-tao/tao-moi?programId=${item.programId}`}
+                            href={
+                              ["DRAFT", "RETURNED"].includes(item.status)
+                                ? `/dashboard/chuong-trinh-dao-tao/tao-moi?edit=${item.id}`
+                                : `/dashboard/chuong-trinh-dao-tao/${item.id}/build`
+                            }
                           >
-                            <Button variant="outline" size="sm">
-                              Thêm phiên bản
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !["DRAFT", "RETURNED"].includes(item.status)
+                              }
+                              title={
+                                !["DRAFT", "RETURNED"].includes(item.status)
+                                  ? "Chỉ sửa phiên bản bản nháp hoặc yêu cầu sửa"
+                                  : undefined
+                              }
+                            >
+                              Sửa phiên bản
                             </Button>
                           </Link>
                         )}

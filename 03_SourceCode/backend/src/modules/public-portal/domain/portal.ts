@@ -3,6 +3,7 @@ export interface PortalQuery {
   limit: number;
   search?: string;
   levelId?: string;
+  levelCode?: "MASTER" | "DOCTOR";
   category?: string;
   status?: string;
 }
@@ -36,8 +37,8 @@ export interface PortalActor {
 }
 export abstract class PortalRepository {
   abstract options(): Promise<unknown>;
-  abstract programs(query: PortalQuery): Promise<unknown>;
-  abstract program(id: string): Promise<unknown>;
+  abstract programs(query: PortalQuery, viewerId?: string): Promise<unknown>;
+  abstract program(id: string, viewerId?: string): Promise<unknown>;
   abstract documents(query: PortalQuery, admin?: boolean): Promise<unknown>;
   abstract saveDocument(
     id: string | null,

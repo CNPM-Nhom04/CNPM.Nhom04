@@ -16,11 +16,20 @@ export class CourseService {
   }
   private validate(input: CourseVersionInput) {
     if (
-      input.effectiveFrom < "1000-01-01" ||
-      (input.effectiveTo && input.effectiveTo < input.effectiveFrom)
+      !Number.isInteger(input.credits) ||
+      input.credits < 1 ||
+      input.credits > 15
     )
       throw new BadRequestException(
-        "Ngày kết thúc phải từ ngày bắt đầu; năm từ 1000 trở lên.",
+        "Số tín chỉ phải là số nguyên từ 1 đến 15.",
+      );
+    if (input.effectiveFrom < "1000-01-01")
+      throw new BadRequestException(
+        "Ngày bắt đầu hiệu lực phải có năm từ 1000 trở lên.",
+      );
+    if (input.effectiveTo && input.effectiveTo <= input.effectiveFrom)
+      throw new BadRequestException(
+        "Ngày kết thúc hiệu lực phải lớn hơn ngày bắt đầu hiệu lực.",
       );
   }
   list(query: CourseQuery, actor: CourseActor) {

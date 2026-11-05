@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Post,
   Put,
@@ -22,6 +23,7 @@ import {
   PublicDocumentDto,
   SubscriptionDto,
 } from "../application/portal.dto";
+import { OptionalPortalAuthGuard } from "./optional-portal-auth.guard";
 import { SubscriptionRateGuard } from "./subscription-rate.guard";
 @ApiTags("Public - Cổng thông tin")
 @Controller("public")
@@ -37,11 +39,20 @@ export class PortalController {
   @Get("options") options() {
     return this.service.options();
   }
-  @Get("chuong-trinh-dao-tao") programs(@Query() q: PortalQueryDto) {
-    return this.service.programs(q);
+  @Get("chuong-trinh-dao-tao")
+  @UseGuards(OptionalPortalAuthGuard)
+  @Header("Cache-Control", "private, no-store")
+  programs(
+    @Query() q: PortalQueryDto,
+    @Req() req: { user?: { userId: string } },
+  ) {
+    return this.service.programs(q, req.user?.userId);
   }
-  @Get("chuong-trinh-dao-tao/:id") program(@Param("id") id: string) {
-    return this.service.program(id);
+  @Get("chuong-trinh-dao-tao/:id")
+  @UseGuards(OptionalPortalAuthGuard)
+  @Header("Cache-Control", "private, no-store")
+  program(@Param("id") id: string, @Req() req: { user?: { userId: string } }) {
+    return this.service.program(id, req.user?.userId);
   }
   @Get("van-ban") documents(@Query() q: PortalQueryDto) {
     return this.service.documents(q);
