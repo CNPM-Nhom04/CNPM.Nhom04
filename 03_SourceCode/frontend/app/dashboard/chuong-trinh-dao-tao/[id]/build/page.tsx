@@ -1,8 +1,10 @@
 "use client";
+import { ProgramExcelImport } from "@/components/programs/ProgramExcelImport";
+import { fillGroupCredits, selectCourses } from "@/lib/programs/selection";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Save, Send, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { Save, Send, CheckCircle2 } from "lucide-react";
 import { downloadExcel } from "@/lib/services/excelDownload";
 import { Button, Input, Badge } from "@/components/ui";
 import {
@@ -15,8 +17,6 @@ import {
   programService,
   type ProgramRecord,
   type ProgramTrack,
-  type PageResult,
-  type CatalogCourse,
 } from "@/lib/services/programService";
 export default function ProgramBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,22 +28,30 @@ export default function ProgramBuilderPage() {
   const [version, setVersion] = useState(0),
     [activeTrackId, setActiveTrackId] = useState(""),
     [dirty, setDirty] = useState(false);
-  const [catalogSearch, setCatalogSearch] = useState(""),
-    [catalogPage, setCatalogPage] = useState(1),
-    [catalog, setCatalog] = useState<PageResult<CatalogCourse> | null>(null),
-    [catalogLoading, setCatalogLoading] = useState(true),
-    [catalogError, setCatalogError] = useState<Error | null>(null);
-  const [catalogVersion, setCatalogVersion] = useState(0);
+  const [detailTab, setDetailTab] = useState<"courses" | "excel" | "info">(
+    "courses",
+  );
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseGroup, setCourseGroup] = useState("");
   const [check, setCheck] = useState<{
     valid: boolean;
     issues: string[];
   } | null>(null);
   const editable =
+    !program?.sourceReadOnly &&
     !!program?.permissions.canEdit &&
     ["DRAFT", "RETURNED"].includes(program.status);
   const track =
     program?.tracks.find((item) => item.id === activeTrackId) ||
     program?.tracks[0];
+  const visibleCourses =
+    track?.courses.filter(
+      (course) =>
+        (!courseGroup || course.groupId === courseGroup) &&
+        `${course.code} ${course.name}`
+          .toLocaleLowerCase("vi")
+          .includes(courseSearch.trim().toLocaleLowerCase("vi")),
+    ) || [];
   const editableTrack = editable && track?.status !== "INACTIVE";
   useEffect(() => {
     const controller = new AbortController();
@@ -68,44 +76,8 @@ export default function ProgramBuilderPage() {
       });
     return () => controller.abort();
   }, [id, version]);
-  useEffect(() => {
-    if (!editable) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      programRequest<PageResult<CatalogCourse>>(
-        "/hoc-phan?" +
-          new URLSearchParams({
-            searchTerm: catalogSearch.trim(),
-            page: String(catalogPage),
-            limit: "10",
-          }),
-        { signal: controller.signal },
-      )
-        .then((result) => {
-          if (!controller.signal.aborted) {
-            setCatalog(result);
-            setCatalogError(null);
-          }
-        })
-        .catch((reason: unknown) => {
-          if (!controller.signal.aborted)
-            setCatalogError(
-              reason instanceof Error
-                ? reason
-                : new Error("Không thể tải ngân hàng học phần."),
-            );
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setCatalogLoading(false);
-        });
-    }, 250);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [editable, catalogSearch, catalogPage, version, catalogVersion]);
   function updateTrack(change: (track: ProgramTrack) => ProgramTrack) {
-    if (!track || !editable) return;
+    if (!track || !editableTrack || busy) return;
     setProgram((current) =>
       current
         ? {
@@ -119,6 +91,43 @@ export default function ProgramBuilderPage() {
     setDirty(true);
     setCheck(null);
     setMessage("");
+  }
+  async function autoSelect() {
+    if (!program || !track || busy || !editableTrack) return;
+    setBusy(true);
+    setError(null);
+    setMessage("");
+    try {
+      const ids = await programRequest<string[]>(
+        `/${program.id}/hoc-phan-phu-hop`,
+      );
+      const selected = selectCourses(track, new Set(ids));
+      const required = selected.courses
+        .filter((c) => c.requirementType === "REQUIRED")
+        .reduce((sum, c) => sum + c.credits, 0);
+      const ratio =
+        selected.requiredCredits > 0
+          ? ((selected.requiredCredits - required) * 100) /
+            selected.requiredCredits
+          : 0;
+      if (
+        (program.rules.minElective != null &&
+          ratio < program.rules.minElective - 0.0001) ||
+        (program.rules.maxElective != null &&
+          ratio > program.rules.maxElective + 0.0001)
+      )
+        throw new Error(
+          "Tổ hợp môn không đáp ứng tỷ lệ tín chỉ tự chọn. Hãy điều chỉnh tính chất môn hoặc định mức nhóm.",
+        );
+      updateTrack(() => selected);
+      setMessage(
+        `Đã chọn ${selected.courses.length} môn phù hợp ngành ${program.majorName}, đủ ${selected.requiredCredits} TC. Lưu cấu trúc để kiểm tra CTĐT.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error("Không chọn được môn."));
+    } finally {
+      setBusy(false);
+    }
   }
   async function action(type: "save" | "validate" | "submit") {
     if (!program || busy) return;
@@ -164,7 +173,7 @@ export default function ProgramBuilderPage() {
     setVersion((value) => value + 1);
   }
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 pb-16">
       <ProgramFeedback error={error} message={message} retry={reload} />
       <div className="bg-white p-5 rounded-xl border flex flex-wrap justify-between items-center gap-4">
         <div>
@@ -194,7 +203,7 @@ export default function ProgramBuilderPage() {
                   : "pending"
             }
           >
-            {program.statusLabel}
+            {program.sourceUrl ? "Công bố trên AGU" : program.statusLabel}
           </Badge>
         )}
       </div>
@@ -227,7 +236,7 @@ export default function ProgramBuilderPage() {
                   }
                 }}
               >
-                Xuất Excel hướng đang xem
+                Xuất Excel
               </Button>
             )}
             {dirty && (
@@ -241,7 +250,7 @@ export default function ProgramBuilderPage() {
                 href={`/dashboard/chuong-trinh-dao-tao/tao-moi?edit=${program.id}`}
               >
                 <Button variant="outline" disabled={busy || dirty}>
-                  Sửa thông tin chung / định mức
+                  Thông tin chung
                 </Button>
               </Link>
             )}
@@ -296,120 +305,257 @@ export default function ProgramBuilderPage() {
               )}
             </div>
           )}
-          <div className="bg-white rounded-xl border p-5 text-sm space-y-2">
-            <p>
-              Định mức mỗi hướng: <strong>{program.tongTinChiYeuCau} TC</strong>
-              . Quy định bậc: {program.rules.minCredits ?? "—"}–
-              {program.rules.maxCredits ?? "—"} TC; tự chọn{" "}
-              {program.rules.minElective ?? "—"}–
-              {program.rules.maxElective ?? "—"}%.
-            </p>
-            <p className="text-slate-500">
-              Mỗi hướng là một cấu trúc độc lập. Tổng định mức tối thiểu các
-              nhóm phải bằng định mức hướng; phần vượt tín chỉ bắt buộc được
-              chọn từ các học phần tự chọn.
-            </p>
-          </div>
-          <nav
-            aria-label="Các phần chi tiết CTĐT"
-            className="flex flex-wrap gap-4 text-sm text-blue-700"
-          >
-            <a className="underline" href="#program-details">
-              Thông tin chung / nguồn dữ liệu
-            </a>
-            <a className="underline" href="#program-plos">
-              Chuẩn đầu ra PLO
-            </a>
-            <a className="underline" href="#program-history">
-              Lịch sử xét duyệt
-            </a>
-          </nav>
+          {program.sourceUrl && (
+            <section className="rounded-xl border bg-white p-5 space-y-3">
+              <h2 className="font-bold">Chương trình công bố trên AGU</h2>
+              <p className="text-sm">
+                {program.sourceInstitution} · Mã ngành {program.sourceMajorCode}{" "}
+                · {program.khoaTuyenSinh || "Chưa công bố niên khóa"}
+              </p>
+              <div className="flex gap-4 text-sm text-blue-700 underline">
+                <a href={program.sourceUrl} target="_blank" rel="noreferrer">
+                  Xem trang gốc AGU
+                </a>
+                {program.sourceDocumentUrl && (
+                  <a
+                    href={program.sourceDocumentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Mở tài liệu CTĐT
+                  </a>
+                )}
+              </div>
+              {program.sourceTotalCredits != null && (
+                <p className="text-sm">
+                  Số tín chỉ theo nguồn:{" "}
+                  <strong>{program.sourceTotalCredits} TC</strong>.
+                </p>
+              )}
+              {program.sourceContent && (
+                <details open={!program.tracks.length}>
+                  <summary className="cursor-pointer font-medium text-sm">
+                    Bản trích nội dung chương trình từ AGU
+                  </summary>
+                  <pre className="mt-3 max-h-[65vh] overflow-auto whitespace-pre-wrap break-words font-sans text-sm leading-7">
+                    {program.sourceContent}
+                  </pre>
+                </details>
+              )}
+              {!program.tracks.length && (
+                <p className="text-sm text-slate-600">
+                  Học phần và kế hoạch đào tạo xem trong nội dung / tài liệu
+                  gốc. Chưa chuyển thành cấu trúc nhóm A–D trong hệ thống.
+                </p>
+              )}
+            </section>
+          )}
           <div className="flex gap-2 flex-wrap">
             {program.tracks.map((item) => (
               <Button
                 key={item.id}
                 variant={track?.id === item.id ? "primary" : "outline"}
                 disabled={busy}
-                onClick={() => setActiveTrackId(item.id)}
+                onClick={() => {
+                  setActiveTrackId(item.id);
+                  setCourseGroup("");
+                }}
               >
                 {item.name}
                 {item.status === "INACTIVE" ? " (ngừng hoạt động)" : ""}
               </Button>
             ))}
           </div>
-          {track && (
-            <fieldset disabled={busy || !editableTrack} className="space-y-5">
-              <section className="bg-white rounded-xl border p-5 space-y-4">
+          <nav
+            aria-label="Nội dung chi tiết CTĐT"
+            className="flex gap-1 border-b overflow-x-auto"
+          >
+            {(
+              [
+                { id: "courses", label: "Học phần & tín chỉ" },
+                ...(editableTrack
+                  ? [{ id: "excel", label: "Nhập Excel" }]
+                  : []),
+                { id: "info", label: "Thông tin & lịch sử" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                aria-current={detailTab === tab.id ? "page" : undefined}
+                onClick={() => setDetailTab(tab.id as typeof detailTab)}
+                className={`whitespace-nowrap px-4 py-2.5 text-sm border-b-2 ${detailTab === tab.id ? "border-blue-600 text-blue-700 font-semibold" : "border-transparent text-slate-500 hover:text-slate-900"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          {detailTab === "info" && (
+            <div className="space-y-3">
+              <div className="bg-white rounded-xl border p-5 text-sm space-y-2">
+                <p>
+                  Định mức mỗi hướng:{" "}
+                  <strong>
+                    {program.sourceUrl
+                      ? program.sourceTotalCredits == null
+                        ? "Xem tài liệu AGU"
+                        : `${program.sourceTotalCredits} TC`
+                      : `${program.tongTinChiYeuCau} TC`}
+                  </strong>
+                  . Quy định bậc: {program.rules.minCredits ?? "—"}–
+                  {program.rules.maxCredits ?? "—"} TC; tự chọn{" "}
+                  {program.rules.minElective ?? "—"}–
+                  {program.rules.maxElective ?? "—"}%.
+                </p>
+                <p className="text-slate-500">
+                  Mỗi hướng là một cấu trúc độc lập. Tổng định mức tối thiểu các
+                  nhóm phải bằng định mức hướng; phần vượt tín chỉ bắt buộc được
+                  chọn từ các học phần tự chọn.
+                </p>
+              </div>
+              <div className="rounded-xl border bg-white p-4 space-y-4">
+                <nav
+                  aria-label="Các phần chi tiết CTĐT"
+                  className="flex flex-wrap gap-4 text-sm text-blue-700"
+                >
+                  <a className="underline" href="#program-details">
+                    Thông tin chung / nguồn dữ liệu
+                  </a>
+                  <a className="underline" href="#program-plos">
+                    Chuẩn đầu ra PLO
+                  </a>
+                  <a className="underline" href="#program-history">
+                    Lịch sử xét duyệt
+                  </a>
+                </nav>
+                <ProgramSqlDetails program={program} />
+                <section className="bg-white border rounded-xl p-5 space-y-3">
+                  <h2 className="font-bold">
+                    Biên bản gần nhất & tài liệu đính kèm
+                  </h2>
+                  {program.review ? (
+                    <div className="text-sm space-y-1">
+                      <p>
+                        {program.review.hoiDongThamDinh} ·{" "}
+                        {program.review.ngayHop}
+                      </p>
+                      <p>
+                        Chủ tịch: {program.review.chuTichHoidong}; Thư ký:{" "}
+                        {program.review.thuKhao}
+                      </p>
+                      <p>Kết luận: {program.review.ketLuan}</p>
+                      <p className="whitespace-pre-line">
+                        {program.review.yKienDongGop}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Chưa có biên bản thẩm định cho lần gửi gần nhất.
+                    </p>
+                  )}
+                  {program.documents.map((document) => (
+                    <a
+                      key={document.id}
+                      className="block text-sm text-blue-600 underline"
+                      href={`/api/chuong-trinh-dao-tao/${program.id}/tai-lieu/${document.id}`}
+                    >
+                      {document.name}
+                    </a>
+                  ))}
+                </section>
+              </div>
+            </div>
+          )}
+          {track && editableTrack && detailTab === "excel" && (
+            <ProgramExcelImport
+              key={`${program.id}-${track.id}`}
+              programId={program.id}
+              track={track}
+              revision={program.revision}
+              disabled={busy}
+              onApply={updateTrack}
+            />
+          )}
+          {track && detailTab === "courses" && (
+            <fieldset disabled={busy || !editableTrack} className="space-y-3">
+              <section className="bg-white rounded-xl border p-4 space-y-3">
                 <div className="flex flex-wrap gap-3 items-center justify-between">
                   <h2 className="font-bold">Nhóm kiến thức — {track.name}</h2>
                   {editableTrack && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateTrack((current) => ({
-                          ...current,
-                          groups: current.groups.map((group) => ({
-                            ...group,
-                            minimumCredits: current.groups.some(
-                              (child) => child.parentId === group.id,
-                            )
-                              ? 0
-                              : current.courses
-                                  .filter(
-                                    (course) => course.groupId === group.id,
-                                  )
-                                  .reduce(
-                                    (sum, course) => sum + course.credits,
-                                    0,
-                                  ),
-                          })),
-                        }))
-                      }
-                    >
-                      Điền tối thiểu theo học phần đã chọn
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={autoSelect}
+                      >
+                        Tự chọn môn theo ngành
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateTrack(fillGroupCredits)}
+                      >
+                        Tính tín chỉ nhóm từ môn đã chọn
+                      </Button>
+                    </div>
                   )}
                 </div>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <p className="text-xs text-slate-500">
+                  Ngành {program.majorName} · Định mức {track.requiredCredits}{" "}
+                  TC. Tự chọn chỉ dùng môn được đối chiếu từ CTĐT đã ban hành
+                  cùng ngành và bậc; giữ môn bắt buộc và tiên quyết.
+                </p>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {track.groups.map((group) => (
-                    <div key={group.id} className="space-y-1">
+                    <div
+                      key={group.id}
+                      className="rounded-lg border bg-slate-50 p-3 space-y-2"
+                    >
                       <label
                         htmlFor={"group-" + group.id}
                         className="text-xs font-semibold"
                       >
-                        {group.code} — {group.name} · Tối đa:{" "}
-                        {group.maximumCredits ?? "không giới hạn"} TC
-                        {group.parentId ? " (nhóm con)" : ""}
+                        <span className="text-blue-700">{group.code}</span> ·{" "}
+                        {group.name}
                       </label>
-                      <Input
-                        id={"group-" + group.id}
-                        type="number"
-                        min="0"
-                        max="9999"
-                        step="0.01"
-                        disabled={!editableTrack}
-                        value={group.minimumCredits}
-                        onChange={(event) =>
-                          updateTrack((current) => ({
-                            ...current,
-                            groups: current.groups.map((item) =>
-                              item.id === group.id
-                                ? {
-                                    ...item,
-                                    minimumCredits: Number(event.target.value),
-                                  }
-                                : item,
-                            ),
-                          }))
-                        }
-                      />
+                      <p className="text-lg font-bold">
+                        {group.minimumCredits}{" "}
+                        <span className="text-xs font-normal">TC</span>
+                      </p>
                     </div>
                   ))}
                 </div>
               </section>
               <section className="bg-white rounded-xl border overflow-x-auto">
+                <div className="px-4 py-3 border-b text-sm font-semibold">
+                  Học phần đã chọn · {track.courses.length} môn ·{" "}
+                  {track.courses.reduce((sum, c) => sum + c.credits, 0)} TC /
+                  định mức {track.requiredCredits} TC
+                </div>
+                <div className="flex flex-wrap gap-2 p-3 border-b">
+                  <Input
+                    aria-label="Tìm trong môn đã chọn"
+                    placeholder="Tìm mã hoặc tên môn…"
+                    value={courseSearch}
+                    onChange={(event) => setCourseSearch(event.target.value)}
+                    className="max-w-xs"
+                  />
+                  <select
+                    aria-label="Lọc nhóm môn đã chọn"
+                    value={courseGroup}
+                    onChange={(event) => setCourseGroup(event.target.value)}
+                    className="border rounded-lg px-3 text-sm bg-white"
+                  >
+                    <option value="">Tất cả nhóm</option>
+                    {track.groups.map((g) => (
+                      <option value={g.id} key={g.id}>
+                        {g.code} — {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <table className="w-full min-w-[850px] text-sm text-left">
                   <thead>
                     <tr className="bg-slate-50 text-xs uppercase">
@@ -421,282 +567,57 @@ export default function ProgramBuilderPage() {
                         "Học kỳ",
                         "",
                       ].map((label, index) => (
-                        <th key={index} className="p-3">
+                        <th key={index} className="px-3 py-2">
                           {label}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {track.courses.map((course) => (
+                    {visibleCourses.map((course) => (
                       <tr key={course.id}>
-                        <td className="p-3">
+                        <td className="px-3 py-2">
                           <strong>{course.code}</strong>
                           <p className="text-xs text-slate-500">
                             {course.name}
                           </p>
-                          <ProgramCourseDetails course={course} />
+                          <ProgramCourseDetails course={course} compact />
                         </td>
-                        <td className="p-3">{course.credits}</td>
-                        <td className="p-3">
-                          <select
-                            aria-label={`Nhóm ${course.code}`}
-                            disabled={!editableTrack}
-                            value={course.groupId}
-                            className="border rounded p-2 max-w-48"
-                            onChange={(event) =>
-                              updateTrack((current) => ({
-                                ...current,
-                                courses: current.courses.map((item) =>
-                                  item.id === course.id
-                                    ? { ...item, groupId: event.target.value }
-                                    : item,
-                                ),
-                              }))
-                            }
-                          >
-                            {track.groups.map((group) => (
-                              <option key={group.id} value={group.id}>
-                                {group.code} — {group.name}
-                              </option>
-                            ))}
-                          </select>
+                        <td className="px-3 py-2">{course.credits}</td>
+                        <td className="px-3 py-2">
+                          <span>
+                            {track.groups.find((g) => g.id === course.groupId)
+                              ?.code || "—"}
+                          </span>
                         </td>
-                        <td className="p-3">
-                          <select
-                            aria-label={`Tính chất ${course.code}`}
-                            disabled={!editableTrack}
-                            value={course.requirementType}
-                            className="border rounded p-2"
-                            onChange={(event) =>
-                              updateTrack((current) => ({
-                                ...current,
-                                courses: current.courses.map((item) =>
-                                  item.id === course.id
-                                    ? {
-                                        ...item,
-                                        requirementType: event.target.value as
-                                          "REQUIRED" | "ELECTIVE",
-                                      }
-                                    : item,
-                                ),
-                              }))
-                            }
-                          >
-                            <option value="REQUIRED">Bắt buộc</option>
-                            <option value="ELECTIVE">Tự chọn</option>
-                          </select>
+                        <td className="px-3 py-2">
+                          <span>
+                            {course.requirementType === "REQUIRED"
+                              ? "Bắt buộc"
+                              : "Tự chọn"}
+                          </span>
                         </td>
-                        <td className="p-3">
-                          <Input
-                            aria-label={`Học kỳ ${course.code}`}
-                            disabled={!editableTrack}
-                            type="number"
-                            min="1"
-                            max="12"
-                            placeholder="Chưa xếp"
-                            value={course.semester ?? ""}
-                            onChange={(event) =>
-                              updateTrack((current) => ({
-                                ...current,
-                                courses: current.courses.map((item) =>
-                                  item.id === course.id
-                                    ? {
-                                        ...item,
-                                        semester:
-                                          event.target.value === ""
-                                            ? null
-                                            : Number(event.target.value),
-                                      }
-                                    : item,
-                                ),
-                              }))
-                            }
-                          />
+                        <td className="px-3 py-2">
+                          <span>{course.semester ?? "—"}</span>
                         </td>
-                        <td className="p-3">
-                          {editable && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Bỏ học phần"
-                              onClick={() => {
-                                if (confirm("Bỏ học phần khỏi hướng này?"))
-                                  updateTrack((current) => ({
-                                    ...current,
-                                    courses: current.courses.filter(
-                                      (item) => item.id !== course.id,
-                                    ),
-                                  }));
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          )}
-                        </td>
+                        <td className="px-3 py-2"></td>
                       </tr>
                     ))}
-                    {!track.courses.length && (
+                    {!visibleCourses.length && (
                       <tr>
                         <td
                           colSpan={6}
                           className="p-8 text-center text-slate-500"
                         >
-                          Chưa chọn học phần cho hướng này.
+                          Chưa có học phần hoặc không có môn khớp bộ lọc.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </section>
-              {editableTrack && (
-                <section className="bg-white border rounded-xl p-5 space-y-4">
-                  <h2 className="font-bold">Chọn học phần từ ngân hàng</h2>
-                  <ProgramFeedback
-                    error={catalogError}
-                    retry={() => {
-                      setCatalogLoading(true);
-                      setCatalogVersion((value) => value + 1);
-                    }}
-                  />
-                  <Input
-                    aria-label="Tìm học phần"
-                    maxLength={255}
-                    placeholder="Tìm theo mã hoặc tên học phần..."
-                    value={catalogSearch}
-                    onChange={(event) => {
-                      setCatalogSearch(event.target.value);
-                      setCatalogPage(1);
-                      setCatalogLoading(true);
-                    }}
-                  />
-                  {catalogLoading ? (
-                    <p role="status" className="text-sm">
-                      Đang tải học phần...
-                    </p>
-                  ) : (
-                    catalog?.data.map((course) => (
-                      <div
-                        key={course.id}
-                        className="flex justify-between gap-3 items-center border-b pb-2 text-sm"
-                      >
-                        <div>
-                          <strong>{course.code}</strong> — {course.name}
-                          <p className="text-xs text-slate-500">
-                            {course.credits} TC · LT {course.theoryHours} / TH{" "}
-                            {course.practiceHours}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={
-                            track.courses.some(
-                              (item) => item.courseId === course.courseId,
-                            ) || !track.groups.length
-                          }
-                          onClick={() =>
-                            updateTrack((current) => ({
-                              ...current,
-                              courses: [
-                                ...current.courses,
-                                {
-                                  id: "new-" + course.id,
-                                  courseId: course.courseId,
-                                  courseVersionId: course.id,
-                                  code: course.code,
-                                  name: course.name,
-                                  credits: course.credits,
-                                  englishName: null,
-                                  theoryHours: course.theoryHours,
-                                  practiceHours: course.practiceHours,
-                                  prerequisites: [],
-                                  ploMappings: [],
-                                  groupId: current.groups[0].id,
-                                  requirementType: "REQUIRED",
-                                  semester: 1,
-                                },
-                              ],
-                            }))
-                          }
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Thêm
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                  {!catalogLoading && !catalog?.data.length && (
-                    <p className="text-sm text-slate-500">
-                      Không tìm thấy học phần ACTIVE phù hợp.
-                    </p>
-                  )}
-                  <div className="flex gap-3 items-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={catalogLoading || catalogPage <= 1}
-                      onClick={() => {
-                        setCatalogPage(catalogPage - 1);
-                        setCatalogLoading(true);
-                      }}
-                    >
-                      Trước
-                    </Button>
-                    <span className="text-xs">
-                      Trang {catalogPage} / {catalog?.meta.totalPages ?? 0}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={
-                        catalogLoading ||
-                        catalogPage >= (catalog?.meta.totalPages ?? 0)
-                      }
-                      onClick={() => {
-                        setCatalogPage(catalogPage + 1);
-                        setCatalogLoading(true);
-                      }}
-                    >
-                      Sau
-                    </Button>
-                  </div>
-                </section>
-              )}
             </fieldset>
           )}
-          <ProgramSqlDetails program={program} />
-          <section className="bg-white border rounded-xl p-5 space-y-3">
-            <h2 className="font-bold">Biên bản gần nhất & tài liệu đính kèm</h2>
-            {program.review ? (
-              <div className="text-sm space-y-1">
-                <p>
-                  {program.review.hoiDongThamDinh} · {program.review.ngayHop}
-                </p>
-                <p>
-                  Chủ tịch: {program.review.chuTichHoidong}; Thư ký:{" "}
-                  {program.review.thuKhao}
-                </p>
-                <p>Kết luận: {program.review.ketLuan}</p>
-                <p className="whitespace-pre-line">
-                  {program.review.yKienDongGop}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">
-                Chưa có biên bản thẩm định cho lần gửi gần nhất.
-              </p>
-            )}
-            {program.documents.map((document) => (
-              <a
-                key={document.id}
-                className="block text-sm text-blue-600 underline"
-                href={`/api/chuong-trinh-dao-tao/${program.id}/tai-lieu/${document.id}`}
-              >
-                {document.name}
-              </a>
-            ))}
-          </section>
         </>
       )}
     </div>

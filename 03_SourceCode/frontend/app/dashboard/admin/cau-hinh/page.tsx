@@ -1,9 +1,14 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState } from "react";
 import { Sliders, Save, RefreshCw, Shield, Settings } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, Select } from "@/components/ui";
 import { AdminFeedback } from "@/components/admin/AdminFeedback";
-import { adminRequest, type AdminSettings } from "@/lib/services/adminService";
+import {
+  adminRequest,
+  type AdminSettings,
+  type AdminSettingsOptions,
+} from "@/lib/services/adminService";
 
 export default function CauHinhPage() {
   const [config, setConfig] = useState<AdminSettings>({
@@ -15,6 +20,9 @@ export default function CauHinhPage() {
     ngoaiNguBatBuocThacSi: "",
     ngoaiNguBatBuocTienSi: "",
   });
+  const [languageRequirements, setLanguageRequirements] = useState<string[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -23,10 +31,16 @@ export default function CauHinhPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    adminRequest<AdminSettings>("cau-hinh", { signal: controller.signal })
-      .then((result) => {
+    Promise.all([
+      adminRequest<AdminSettings>("cau-hinh", { signal: controller.signal }),
+      adminRequest<AdminSettingsOptions>("cau-hinh/options", {
+        signal: controller.signal,
+      }),
+    ])
+      .then(([result, options]) => {
         if (!controller.signal.aborted) {
           setConfig(result);
+          setLanguageRequirements(options.languageRequirements);
           setError(null);
         }
       })
@@ -44,7 +58,9 @@ export default function CauHinhPage() {
     return () => controller.abort();
   }, [version]);
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = event.target;
     setConfig((previous) => ({ ...previous, [name]: value }));
   };
@@ -123,140 +139,216 @@ export default function CauHinhPage() {
       </div>
 
       {/* 2. Form cấu hình */}
-      <form onSubmit={handleSave} className="space-y-6">
-        <fieldset
-          disabled={loading || saving || !config.maxTinChiHocKy}
+      {!loading && config.maxTinChiHocKy && (
+        <dl className="grid gap-3 md:grid-cols-3 text-sm">
+          <div className="rounded-xl border bg-white p-4">
+            <dt className="text-slate-500">Chuẩn ngoại ngữ Thạc sĩ</dt>
+            <dd className="mt-1 font-semibold">
+              {config.ngoaiNguBatBuocThacSi}
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <dt className="text-slate-500">Chuẩn ngoại ngữ Tiến sĩ</dt>
+            <dd className="mt-1 font-semibold">
+              {config.ngoaiNguBatBuocTienSi}
+            </dd>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <dt className="text-slate-500">
+              Thời hạn mở đăng ký học phần tối đa
+            </dt>
+            <dd className="mt-1 font-semibold">
+              {config.thoiHanDangKyToiDa} ngày
+            </dd>
+          </div>
+        </dl>
+      )}
+      {!loading && !error && (
+        <ExcelOnlyForm
+          onSubmit={handleSave}
           className="space-y-6"
+          heading="Thêm / sửa cấu hình đào tạo bằng Excel"
+          recordLabel="Tham số đào tạo sau đại học"
+          downloadFilename="Cau_hinh_dao_tao.xlsx"
+          showDependentStep={false}
+          description="Mẫu có sẵn cấu hình hiện tại. Chỉ sửa dòng 2; hai cột chuẩn ngoại ngữ chọn từ danh sách thả xuống. Thời hạn đăng ký tính bằng ngày: nhập 15 nghĩa là 15 ngày. Xem trước thay đổi trước khi lưu."
         >
-          {/* Khối 1: Quy định tín chỉ & Điểm số */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50/90 border-b border-slate-200 flex items-center gap-2">
-              <Settings className="h-4.5 w-4.5 text-blue-600" />
-              <h2 className="font-bold text-slate-800 text-sm">
-                1. Quy Định Tín Chỉ & Ngưỡng Đánh Giá
-              </h2>
-            </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Số Tín Chỉ Tối Đa Mỗi Học Kỳ (Học viên)
-                </label>
-                <Input
-                  name="maxTinChiHocKy"
-                  value={config.maxTinChiHocKy}
-                  onChange={handleChange}
-                  required
-                />
+          <fieldset
+            disabled={loading || saving || !config.maxTinChiHocKy}
+            className="space-y-6"
+          >
+            {/* Khối 1: Quy định tín chỉ & Điểm số */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="px-6 py-4 bg-slate-50/90 border-b border-slate-200 flex items-center gap-2">
+                <Settings className="h-4.5 w-4.5 text-blue-600" />
+                <h2 className="font-bold text-slate-800 text-sm">
+                  1. Quy Định Tín Chỉ & Ngưỡng Đánh Giá
+                </h2>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Điểm Đạt Tối Thiểu Học Phần SĐH (Thang 10)
-                </label>
-                <Input
-                  name="diemDatHocPhan"
-                  value={config.diemDatHocPhan}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Số Tín Chỉ Tối Đa Mỗi Học Kỳ (Học viên)
+                  </label>
+                  <Input
+                    id="maxTinChiHocKy"
+                    aria-label="Số tín chỉ tối đa mỗi học kỳ"
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="1"
+                    name="maxTinChiHocKy"
+                    value={config.maxTinChiHocKy}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Định Mức Tín Chỉ Thạc Sĩ (Mặc định)
-                </label>
-                <Input
-                  name="minTinChiTotNghiepThacSi"
-                  value={config.minTinChiTotNghiepThacSi}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Điểm Đạt Tối Thiểu Học Phần SĐH (Thang 10)
+                  </label>
+                  <Input
+                    id="diemDatHocPhan"
+                    aria-label="Điểm đạt tối thiểu học phần (thang 10)"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.01"
+                    name="diemDatHocPhan"
+                    value={config.diemDatHocPhan}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Định Mức Tín Chỉ Tiến Sĩ (Mặc định)
-                </label>
-                <Input
-                  name="minTinChiTotNghiepTienSi"
-                  value={config.minTinChiTotNghiepTienSi}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-          </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Định Mức Tín Chỉ Thạc Sĩ (Mặc định)
+                  </label>
+                  <Input
+                    id="minTinChiTotNghiepThacSi"
+                    aria-label="Tín chỉ tối thiểu Thạc sĩ (mặc định)"
+                    type="number"
+                    min="1"
+                    max="999"
+                    step="1"
+                    name="minTinChiTotNghiepThacSi"
+                    value={config.minTinChiTotNghiepThacSi}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-          {/* Khối 2: Chuẩn đầu ra & Thời hạn */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50/90 border-b border-slate-200 flex items-center gap-2">
-              <Shield className="h-4.5 w-4.5 text-blue-600" />
-              <h2 className="font-bold text-slate-800 text-sm">
-                2. Chuẩn Đầu Ra & Vận Hành Đăng Ký
-              </h2>
-            </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Chuẩn Ngoại Ngữ Bắt Buộc (Bậc Thạc Sĩ)
-                </label>
-                <Input
-                  name="ngoaiNguBatBuocThacSi"
-                  value={config.ngoaiNguBatBuocThacSi}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Chuẩn Ngoại Ngữ Bắt Buộc (Bậc Tiến Sĩ)
-                </label>
-                <Input
-                  name="ngoaiNguBatBuocTienSi"
-                  value={config.ngoaiNguBatBuocTienSi}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Thời Hạn Mở Đăng Ký Tín Chỉ Tối Đa (Ngày)
-                </label>
-                <Input
-                  name="thoiHanDangKyToiDa"
-                  value={config.thoiHanDangKyToiDa}
-                  onChange={handleChange}
-                  required
-                />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Định Mức Tín Chỉ Tiến Sĩ (Mặc định)
+                  </label>
+                  <Input
+                    id="minTinChiTotNghiepTienSi"
+                    aria-label="Tín chỉ tối thiểu Tiến sĩ (mặc định)"
+                    type="number"
+                    min="1"
+                    max="999"
+                    step="1"
+                    name="minTinChiTotNghiepTienSi"
+                    value={config.minTinChiTotNghiepTienSi}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={handleReset}
-                disabled={saving}
-              >
-                <RefreshCw className="h-4 w-4 mr-1.5" />
-                Đặt lại mặc định
-              </Button>
-              <Button
-                type="submit"
-                isLoading={saving}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
-              >
-                <Save className="h-4 w-4 mr-1.5" />
-                Lưu Cấu Hình Tham Số
-              </Button>
+            {/* Khối 2: Chuẩn đầu ra & Thời hạn */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="px-6 py-4 bg-slate-50/90 border-b border-slate-200 flex items-center gap-2">
+                <Shield className="h-4.5 w-4.5 text-blue-600" />
+                <h2 className="font-bold text-slate-800 text-sm">
+                  2. Chuẩn Đầu Ra & Vận Hành Đăng Ký
+                </h2>
+              </div>
+
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Chuẩn Ngoại Ngữ Bắt Buộc (Bậc Thạc Sĩ)
+                  </label>
+                  <Select
+                    id="ngoaiNguBatBuocThacSi"
+                    aria-label="Chuẩn ngoại ngữ bắt buộc — Thạc sĩ"
+                    options={languageRequirements.map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                    name="ngoaiNguBatBuocThacSi"
+                    value={config.ngoaiNguBatBuocThacSi}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Chuẩn Ngoại Ngữ Bắt Buộc (Bậc Tiến Sĩ)
+                  </label>
+                  <Select
+                    id="ngoaiNguBatBuocTienSi"
+                    aria-label="Chuẩn ngoại ngữ bắt buộc — Tiến sĩ"
+                    options={languageRequirements.map((value) => ({
+                      value,
+                      label: value,
+                    }))}
+                    name="ngoaiNguBatBuocTienSi"
+                    value={config.ngoaiNguBatBuocTienSi}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Thời hạn mở đăng ký học phần tối đa (số ngày)
+                  </label>
+                  <Input
+                    id="thoiHanDangKyToiDa"
+                    aria-label="Thời hạn mở đăng ký học phần tối đa (ngày)"
+                    type="number"
+                    min="1"
+                    max="365"
+                    step="1"
+                    name="thoiHanDangKyToiDa"
+                    value={config.thoiHanDangKyToiDa}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={handleReset}
+                  disabled={saving}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1.5" />
+                  Đặt lại mặc định
+                </Button>
+                <Button
+                  type="submit"
+                  isLoading={saving}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                >
+                  <Save className="h-4 w-4 mr-1.5" />
+                  Lưu Cấu Hình Tham Số
+                </Button>
+              </div>
             </div>
-          </div>
-        </fieldset>
-      </form>
+          </fieldset>
+        </ExcelOnlyForm>
+      )}
     </div>
   );
 }

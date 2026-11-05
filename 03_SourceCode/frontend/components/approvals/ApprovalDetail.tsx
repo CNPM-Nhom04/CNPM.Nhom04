@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
@@ -440,7 +441,9 @@ export function ApprovalDetail({ id }: { id: string }) {
             </p>
           )}
           {item.permissions.canDecide && (
-            <form
+            <ExcelOnlyForm
+              recordLabel={`${item.programCode} — ${item.programName}`}
+              recordKey={id}
               onSubmit={decide}
               className="rounded-xl border border-slate-200 bg-white p-5"
             >
@@ -525,7 +528,7 @@ export function ApprovalDetail({ id }: { id: string }) {
                     : "Lưu kết luận thẩm định"}
                 </button>
               </fieldset>
-            </form>
+            </ExcelOnlyForm>
           )}
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="mb-4 font-bold">Lịch sử hành động của lượt duyệt</h2>

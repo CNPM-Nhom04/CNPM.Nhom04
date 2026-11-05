@@ -13,6 +13,10 @@ export interface PublicPage<T> {
   meta: { page: number; limit: number; total: number; totalPages: number };
 }
 export interface PublicProgram {
+  sourceUrl?: string | null;
+  sourceDocumentUrl?: string | null;
+  sourceTotalCredits?: number | null;
+  sourceMajorCode?: string | null;
   id: string;
   code: string;
   versionCode: string;

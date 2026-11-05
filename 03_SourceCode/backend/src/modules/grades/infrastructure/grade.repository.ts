@@ -1,3 +1,4 @@
+import { gradeActionAvailability } from "../domain/grade-actions";
 import {
   BadRequestException,
   ConflictException,
@@ -33,6 +34,7 @@ const SELECT =
  co.class_code classCode,co.status classStatus,t.academic_year academicYear,t.semester,
  r.result_status resultStatus,r.grade,r.revision,r.passed_at passedAt,
  DATE_FORMAT(r.passed_at+INTERVAL 7 HOUR,'%Y-%m-%d') passedDate,r.created_at createdAt,
+ (SELECT cr.status FROM course_registrations cr WHERE cr.id=d.registration_id) registrationStatus,
  CAST(d.registration_id AS CHAR) registrationId,COALESCE(d.state,'LEGACY') state,d.attendance_score attendanceScore,
  d.midterm_score midtermScore,d.exam_score examScore,d.total_score totalScore,d.finalized_at finalizedAt,
  CAST(p.id AS CHAR) policyId,p.attendance_weight attendanceWeight,p.midterm_weight midtermWeight,p.exam_weight examWeight,
@@ -72,6 +74,364 @@ function paged(data, total: number, q: GradeQuery) {
 export class MysqlGradeRepository extends GradeRepository {
   constructor(private readonly db: DataSource) {
     super();
+  }
+  async excelOptions(a: GradeActor) {
+    const rows = await this.db.query(
+      `SELECT CAST(u.id AS CHAR) unitId,u.unit_name unitName,
+      CAST(sc.id AS CHAR) classId,sc.class_code classCode,sc.class_name className,
+      CAST(t.id AS CHAR) termId,t.academic_year academicYear,t.semester
+      FROM student_classes sc
+      JOIN program_version_tracks pt ON pt.id=sc.program_version_track_id
+      JOIN program_versions pv ON pv.id=pt.program_version_id
+      JOIN training_programs tp ON tp.id=pv.program_id
+      JOIN organizational_units u ON u.id=tp.managing_unit_id CROSS JOIN academic_terms t
+      WHERE EXISTS(SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
+        us.scope_type='GLOBAL' OR (us.scope_type='PROGRAM' AND us.program_id=tp.id)
+        OR (us.scope_type='MAJOR' AND us.major_id=tp.major_id)
+        OR (us.scope_type='ORG_UNIT' AND EXISTS(SELECT 1 FROM organizational_unit_closure oc
+          WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=tp.managing_unit_id))))
+      ORDER BY u.unit_name,sc.class_code,t.academic_year DESC,t.semester DESC`,
+      [a.id],
+    );
+    return { data: rows, permissions: { canManage: a.canManage } };
+  }
+  async preparation(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    manager?: EntityManager,
+  ) {
+    const m = manager || this.db.manager;
+    const [context] = await m.query(
+      `SELECT CAST(sc.id AS CHAR) classId,sc.class_code classCode,
+      CAST(sc.program_version_track_id AS CHAR) trackId,sc.status
+      FROM student_classes sc JOIN program_version_tracks pt ON pt.id=sc.program_version_track_id
+      JOIN program_versions pv ON pv.id=pt.program_version_id JOIN training_programs tp ON tp.id=pv.program_id
+      WHERE sc.id=? AND EXISTS(SELECT 1 FROM academic_terms WHERE id=?)
+      AND EXISTS(SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
+        us.scope_type='GLOBAL' OR (us.scope_type='PROGRAM' AND us.program_id=tp.id)
+        OR (us.scope_type='MAJOR' AND us.major_id=tp.major_id)
+        OR (us.scope_type='ORG_UNIT' AND EXISTS(SELECT 1 FROM organizational_unit_closure oc
+          WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=tp.managing_unit_id))))`,
+      [classId, termId, a.id],
+    );
+    if (!context)
+      throw new NotFoundException(
+        "Lớp/học kỳ không tồn tại trong phạm vi tài khoản.",
+      );
+    const members = await m.query(
+      `SELECT CAST(s.id AS CHAR) studentId,s.student_code studentCode,s.full_name studentName
+      FROM student_class_memberships cm JOIN students s ON s.id=cm.student_id
+      WHERE cm.class_id=? AND s.status='ACTIVE' AND EXISTS(SELECT 1 FROM vw_user_student_access sa WHERE sa.user_id=? AND sa.student_id=s.id)
+      AND EXISTS(SELECT 1 FROM student_program_assignments spa WHERE spa.student_id=s.id AND spa.program_version_track_id=? AND spa.assignment_status='ACTIVE') ORDER BY s.student_code`,
+      [classId, a.id, context.trackId],
+    );
+    const offerings = await m.query(
+      `SELECT DISTINCT CAST(co.id AS CHAR) offeringId,co.class_code offeringCode,
+      c.course_code courseCode,cv.course_name courseName,co.capacity,co.status,
+      (SELECT COUNT(*) FROM course_registrations cr WHERE cr.course_offering_id=co.id AND cr.status='REGISTERED') enrolled,
+      CAST(gp.id AS CHAR) policyId
+      FROM course_offerings co JOIN registration_periods rp ON rp.id=co.registration_period_id
+      JOIN course_versions cv ON cv.id=co.course_version_id JOIN courses c ON c.id=cv.course_id
+      JOIN curriculum_courses cc ON cc.course_version_id=cv.id AND cc.program_version_track_id=?
+      LEFT JOIN grade_policies gp ON gp.course_offering_id=co.id
+      WHERE rp.academic_term_id=? AND rp.status IN ('OPEN','CLOSED') AND co.status IN ('OPEN','CLOSED','CONFIRMED','COMPLETED')
+      AND ${COURSE_SCOPE} ORDER BY c.course_code,co.class_code`,
+      [context.trackId, termId, a.id],
+    );
+    const registrations = await m.query(
+      `SELECT s.student_code studentCode,CAST(cr.course_offering_id AS CHAR) offeringId,cr.status
+      FROM course_registrations cr JOIN students s ON s.id=cr.student_id JOIN student_class_memberships cm ON cm.student_id=s.id
+      JOIN course_offerings co ON co.id=cr.course_offering_id JOIN course_versions cv ON cv.id=co.course_version_id
+      JOIN courses c ON c.id=cv.course_id JOIN registration_periods rp ON rp.id=co.registration_period_id
+      WHERE cm.class_id=? AND rp.academic_term_id=? AND ${SCOPE} ORDER BY s.student_code,co.id`,
+      [classId, termId, a.id, a.id],
+    );
+    return {
+      context,
+      members,
+      offerings,
+      registrations,
+      permissions: { canPrepare: !!a.canPrepare },
+    };
+  }
+  async prepareRegistrations(
+    classId: string,
+    termId: string,
+    rows: {
+      studentCode: string;
+      offeringId: string;
+      note: string;
+      reference: string;
+    }[],
+    a: GradeActor,
+    apply: boolean,
+  ) {
+    if (!a.canPrepare)
+      throw new ForbiddenException(
+        "Cần quyền REGISTRATION_MANAGE của cán bộ đào tạo để lập danh sách học.",
+      );
+    return this.write(a, async (m) => {
+      const [permission] = await m.query(
+        `SELECT 1 allowed FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND r.status='ACTIVE' AND p.permission_code='REGISTRATION_MANAGE' LIMIT 1`,
+        [a.id],
+      );
+      if (!permission)
+        throw new ForbiddenException("Quyền lập danh sách học đã bị thu hồi.");
+      const initial = await this.preparation(classId, termId, a, m);
+      await m.query("SELECT id FROM student_classes WHERE id=? FOR UPDATE", [
+        classId,
+      ]);
+      if (initial.context.status !== "ACTIVE")
+        throw new ConflictException("Lớp đã ngừng hoạt động.");
+      // Use the same student-before-offering lock order as grade operations.
+      for (const member of [...initial.members].sort((x, y) =>
+        BigInt(x.studentId) < BigInt(y.studentId) ? -1 : 1,
+      ))
+        await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
+          member.studentId,
+        ]);
+      for (const offering of [...initial.offerings].sort((x, y) =>
+        BigInt(x.offeringId) < BigInt(y.offeringId) ? -1 : 1,
+      ))
+        await m.query("SELECT id FROM course_offerings WHERE id=? FOR UPDATE", [
+          offering.offeringId,
+        ]);
+      const data = await this.preparation(classId, termId, a, m),
+        changes = [],
+        seen = new Set<string>(),
+        counts = new Map<string, number>();
+      let unchanged = 0;
+      if (data.context.status !== "ACTIVE")
+        throw new ConflictException("Lớp đã ngừng hoạt động.");
+      for (const row of rows) {
+        const member = data.members.find(
+          (s) => s.studentCode === row.studentCode,
+        );
+        const offering = data.offerings.find(
+          (o) => o.offeringId === row.offeringId,
+        );
+        if (!member || !offering)
+          throw new BadRequestException(
+            `Học viên ${row.studentCode} hoặc lớp học phần không thuộc lớp, CTĐT, học kỳ và phạm vi được cấp.`,
+          );
+        const key = member.studentId + ":" + offering.offeringId;
+        if (seen.has(key))
+          throw new BadRequestException(
+            "Học viên/lớp học phần bị lặp trong file.",
+          );
+        seen.add(key);
+        const existing = data.registrations.find(
+          (r) =>
+            r.studentCode === row.studentCode &&
+            r.offeringId === row.offeringId,
+        );
+        if (existing) {
+          if (existing.status !== "REGISTERED")
+            throw new ConflictException(
+              "Đăng ký đã hủy/rút; không tự mở lại từ file lập danh sách.",
+            );
+          unchanged++;
+          continue;
+        }
+        if (
+          row.note.trim().length < 10 ||
+          row.note.length > 700 ||
+          !row.reference.trim() ||
+          row.reference.length > 255
+        )
+          throw new BadRequestException(
+            "Dòng đăng ký mới cần lý do 10–700 ký tự và số hồ sơ tối đa 255 ký tự.",
+          );
+        const count = (counts.get(offering.offeringId) || 0) + 1;
+        counts.set(offering.offeringId, count);
+        if (Number(offering.enrolled) + count > Number(offering.capacity))
+          throw new ConflictException(
+            `Lớp học phần ${offering.offeringCode} không đủ chỗ.`,
+          );
+        changes.push({
+          ...row,
+          studentId: member.studentId,
+          studentName: member.studentName,
+          offeringCode: offering.offeringCode,
+          courseCode: offering.courseCode,
+        });
+      }
+      if (apply)
+        for (const row of changes) {
+          await m.query(
+            "INSERT INTO course_registrations(student_id,course_offering_id,registered_by,note) VALUES(?,?,?,?)",
+            [
+              row.studentId,
+              row.offeringId,
+              a.id,
+              `${row.note} [${row.reference}]`,
+            ],
+          );
+          const [{ id }] = await m.query(
+            "SELECT CAST(LAST_INSERT_ID() AS CHAR) id",
+          );
+          await m.query(
+            "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?)",
+            [
+              a.id,
+              a.username,
+              "REGISTRATION_PREPARE",
+              "course_registration",
+              id,
+              JSON.stringify(row),
+              `${row.note} [${row.reference}]`,
+              a.ip || null,
+            ],
+          );
+        }
+      return { changes, changed: changes.length, unchanged, applied: apply };
+    });
+  }
+  async excelRows(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    manager?: EntityManager,
+  ): Promise<any[]> {
+    const m = manager || this.db.manager;
+    return (
+      await m.query(
+        `SELECT CAST(cr.id AS CHAR) registrationId,CAST(s.id AS CHAR) studentId,
+      s.student_code studentCode,s.full_name studentName,CAST(co.id AS CHAR) offeringId,co.class_code offeringCode,
+      co.status classStatus,cr.status registrationStatus,c.course_code courseCode,cv.course_name courseName,
+      CAST(r.id AS CHAR) resultId,r.revision,COALESCE(d.state,IF(r.id IS NULL,'NEW','LEGACY')) state,
+      d.attendance_score attendanceScore,d.midterm_score midtermScore,d.exam_score examScore,d.total_score totalScore,
+      r.grade,r.result_status resultStatus,CAST(gp.id AS CHAR) policyId,gp.revision policyRevision
+      FROM student_class_memberships cm JOIN student_classes sc ON sc.id=cm.class_id JOIN students s ON s.id=cm.student_id
+      JOIN course_registrations cr ON cr.student_id=s.id JOIN course_offerings co ON co.id=cr.course_offering_id
+      JOIN course_versions cv ON cv.id=co.course_version_id JOIN courses c ON c.id=cv.course_id
+      JOIN registration_periods rp ON rp.id=co.registration_period_id
+      LEFT JOIN student_course_results r ON r.student_id=s.id AND r.course_offering_id=co.id
+      LEFT JOIN grade_details d ON d.result_id=r.id LEFT JOIN grade_policies gp ON gp.course_offering_id=co.id
+      WHERE cm.class_id=? AND rp.academic_term_id=? AND ${SCOPE}
+      ORDER BY s.student_code,c.course_code,cr.id`,
+        [classId, termId, a.id, a.id],
+      )
+    ).map((r) => this.map(r));
+  }
+  async importRows(
+    classId: string,
+    termId: string,
+    rows: any[],
+    a: GradeActor,
+    apply: boolean,
+  ) {
+    if (!a.canManage)
+      throw new ForbiddenException("Chỉ cán bộ đào tạo có quyền nhập điểm.");
+    return this.write(a, async (m) => {
+      // Serialize with every existing grade writer using the same student lock order.
+      const initial = await this.excelRows(classId, termId, a, m);
+      for (const id of [
+        ...new Set<string>(initial.map((r) => r.studentId)),
+      ].sort((x, y) => (BigInt(x) < BigInt(y) ? -1 : 1)))
+        await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [id]);
+      const current = new Map(
+        (await this.excelRows(classId, termId, a, m)).map((r) => [
+          r.registrationId,
+          r,
+        ]),
+      );
+      const changes = [];
+      for (const row of rows) {
+        const now = current.get(row.registrationId);
+        if (!now)
+          throw new NotFoundException(
+            "Dòng điểm không còn thuộc lớp/học kỳ hoặc ngoài phạm vi.",
+          );
+        const fields = ["attendanceScore", "midtermScore", "examScore"];
+        const changed = fields.filter(
+          (key) => (row.values[key] ?? null) !== (row.original[key] ?? null),
+        );
+        if (!changed.length) continue;
+        if (
+          now.resultId !== row.original.resultId ||
+          now.state !== row.original.state ||
+          now.policyId !== row.original.policyId ||
+          now.policyRevision !== row.original.policyRevision
+        )
+          throw new ConflictException(
+            `Dòng ${now.studentCode}/${now.courseCode} đã đổi phiên bản hoặc quy tắc; tải lại mẫu.`,
+          );
+        for (const key of changed)
+          if ((now[key] ?? null) !== (row.original[key] ?? null))
+            throw new ConflictException(
+              `Điểm ${now.studentCode}/${now.courseCode} đã được sửa ở cùng ô; tải lại mẫu.`,
+            );
+        if (["LEGACY", "VOIDED"].includes(now.state))
+          throw new ConflictException(
+            "Dòng lịch sử/hủy hiệu lực không được sửa thành điểm thành phần.",
+          );
+        if (
+          now.registrationStatus !== "REGISTERED" ||
+          !OPEN_CLASSES.includes(now.classStatus)
+        )
+          throw new ConflictException(
+            "Đăng ký/lớp không còn cho phép nhập điểm.",
+          );
+        const policy = await this.getPolicy(m, now.offeringId, true);
+        if (!policy)
+          throw new ConflictException(
+            `Lớp ${now.offeringCode} chưa có quy tắc chấm điểm.`,
+          );
+        const values = Object.fromEntries(
+          fields.map((key) => [
+            key,
+            changed.includes(key) ? row.values[key] : now[key],
+          ]),
+        );
+        const total = calculateGrade(values, policy);
+        if (
+          now.state === "FINALIZED" &&
+          (now.classStatus !== "COMPLETED" || total === null)
+        )
+          throw new ConflictException(
+            "Điểm đã chốt cần lớp hoàn tất và đủ thành phần.",
+          );
+        if (row.note.trim().length < 10 || !row.reference.trim())
+          throw new BadRequestException(
+            "Mỗi dòng thay đổi cần lý do tối thiểu 10 ký tự và số hồ sơ.",
+          );
+        changes.push({
+          registrationId: now.registrationId,
+          studentCode: now.studentCode,
+          courseCode: now.courseCode,
+          fields: changed.map((key) => ({
+            key,
+            before: now[key],
+            after: row.values[key],
+          })),
+          resultId: now.resultId,
+          revision: now.revision,
+          values,
+          note: row.note,
+          reference: row.reference,
+        });
+      }
+      if (apply)
+        for (const row of changes) {
+          const write = {
+            ...row.values,
+            note: row.note,
+            reference: row.reference,
+            revision: row.revision,
+            registrationId: row.registrationId,
+          };
+          if (row.resultId) await this.update(row.resultId, write, a, m);
+          else await this.create(write, a, m);
+        }
+      return {
+        changes,
+        changed: changes.length,
+        unchanged: rows.length - changes.length,
+        applied: apply,
+      };
+    });
   }
   private map(row) {
     return {
@@ -228,6 +588,7 @@ export class MysqlGradeRepository extends GradeRepository {
       ...item,
       history: history.map((h) => this.map(h)),
       permissions: { canManage: a.canManage },
+      availableActions: gradeActionAvailability(item, a.canManage),
     };
   }
   detail(id: string, a: GradeActor) {
@@ -278,11 +639,17 @@ export class MysqlGradeRepository extends GradeRepository {
   policy(id: string, a: GradeActor) {
     return this.policyResponse(this.db.manager, id, a);
   }
-  private async write<T>(a: GradeActor, fn: (m: EntityManager) => Promise<T>) {
+  private async write<T>(
+    a: GradeActor,
+    fn: (m: EntityManager) => Promise<T>,
+    manager?: EntityManager,
+  ) {
+    if (manager) return fn(manager);
     try {
       return await this.db.transaction("READ COMMITTED", async (m) => {
         const [user] = await m.query(
           `SELECT u.id FROM users u WHERE u.id=? AND u.account_status='ACTIVE' AND u.deleted_at IS NULL AND u.must_change_password=0
+   AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.status='ACTIVE' AND r.role_code='TRAINING_OFFICER')
    AND 2=(SELECT COUNT(DISTINCT p.permission_code) FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id
     WHERE ur.user_id=u.id AND r.status='ACTIVE' AND p.permission_code IN ('GRADE_READ','GRADE_MANAGE')) FOR UPDATE`,
           [a.id],
@@ -435,105 +802,117 @@ export class MysqlGradeRepository extends GradeRepository {
       );
     return r;
   }
-  create(b: GradeWrite, a: GradeActor) {
-    return this.write(a, async (m) => {
-      const [target] = await m.query(
-        "SELECT CAST(student_id AS CHAR) studentId,CAST(course_offering_id AS CHAR) offeringId FROM course_registrations WHERE id=?",
-        [b.registrationId],
-      );
-      if (!target)
-        throw new NotFoundException("Không tìm thấy đăng ký học phần.");
-      await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
-        target.studentId,
-      ]);
-      await this.getClass(m, String(target.offeringId), a, true);
-      const registration = await this.registration(m, b.registrationId, a);
-      const policy = await this.getPolicy(m, registration.offeringId, true);
-      if (!policy)
-        throw new ConflictException("Lớp chưa có quy tắc chấm điểm trong SQL.");
-      const total = calculateGrade(b, policy);
-      await m.query(
-        "INSERT INTO student_course_results(student_id,course_id,course_version_id,course_offering_id,result_status,grade,recorded_by) VALUES(?,?,?,?,'INCOMPLETE',NULL,?)",
-        [
-          registration.studentId,
-          registration.courseId,
-          registration.courseVersionId,
-          registration.offeringId,
-          a.id,
-        ],
-      );
-      const [{ id }] = await m.query(
-        "SELECT CAST(LAST_INSERT_ID() AS CHAR) id",
-      );
-      await m.query(
-        "INSERT INTO grade_details(result_id,registration_id,policy_id,attendance_score,midterm_score,exam_score,total_score) VALUES(?,?,?,?,?,?,?)",
-        [
-          id,
-          b.registrationId,
-          policy.id,
-          b.attendanceScore ?? null,
-          b.midtermScore ?? null,
-          b.examScore ?? null,
-          total,
-        ],
-      );
-      const item = await this.get(m, id, a);
-      await this.audit(m, a, "GRADE_CREATE", item, null, b.reference, b.note);
-      return this.details(m, id, a);
-    });
-  }
-  update(id: string, b: GradeWrite, a: GradeActor) {
-    return this.write(a, async (m) => {
-      const old = await this.lockResult(m, id, a);
-      if (old.revision !== b.revision)
-        throw new ConflictException("Bảng điểm vừa thay đổi. Hãy tải lại.");
-      if (old.state === "LEGACY")
-        throw new ConflictException(
-          "Kết quả cũ không có điểm thành phần; dùng điều chỉnh theo hồ sơ.",
+  create(b: GradeWrite, a: GradeActor, manager?: EntityManager) {
+    return this.write(
+      a,
+      async (m) => {
+        const [target] = await m.query(
+          "SELECT CAST(student_id AS CHAR) studentId,CAST(course_offering_id AS CHAR) offeringId FROM course_registrations WHERE id=?",
+          [b.registrationId],
         );
-      if (old.state === "VOIDED")
-        throw new ConflictException("Bảng điểm đã hủy; mở lại trước khi nhập.");
-      await this.registration(
-        m,
-        old.registrationId,
-        a,
-        old.state === "FINALIZED",
-      );
-      const policy = await this.getPolicy(m, old.offeringId, true);
-      const total = calculateGrade(b, policy);
-      if (old.state === "FINALIZED" && total === null)
-        throw new BadRequestException(
-          "Điểm đã chốt phải đủ các thành phần có trọng số.",
-        );
-      await m.query(
-        "UPDATE grade_details SET attendance_score=?,midterm_score=?,exam_score=?,total_score=? WHERE result_id=?",
-        [
-          b.attendanceScore ?? null,
-          b.midtermScore ?? null,
-          b.examScore ?? null,
-          total,
-          id,
-        ],
-      );
-      if (old.state === "FINALIZED")
-        await this.publish(m, id, total, policy.passingScore, a);
-      else
+        if (!target)
+          throw new NotFoundException("Không tìm thấy đăng ký học phần.");
+        await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
+          target.studentId,
+        ]);
+        await this.getClass(m, String(target.offeringId), a, true);
+        const registration = await this.registration(m, b.registrationId, a);
+        const policy = await this.getPolicy(m, registration.offeringId, true);
+        if (!policy)
+          throw new ConflictException(
+            "Lớp chưa có quy tắc chấm điểm trong SQL.",
+          );
+        const total = calculateGrade(b, policy);
         await m.query(
-          "UPDATE student_course_results SET revision=revision+1,recorded_by=? WHERE id=?",
-          [a.id, id],
+          "INSERT INTO student_course_results(student_id,course_id,course_version_id,course_offering_id,result_status,grade,recorded_by) VALUES(?,?,?,?,'INCOMPLETE',NULL,?)",
+          [
+            registration.studentId,
+            registration.courseId,
+            registration.courseVersionId,
+            registration.offeringId,
+            a.id,
+          ],
         );
-      const item = await this.get(m, id, a);
-      await this.audit(
-        m,
-        a,
-        old.state === "FINALIZED" ? "GRADE_CORRECT" : "GRADE_UPDATE",
-        item,
-        old,
-        b.reference,
-        b.note,
-      );
-      return this.details(m, id, a);
-    });
+        const [{ id }] = await m.query(
+          "SELECT CAST(LAST_INSERT_ID() AS CHAR) id",
+        );
+        await m.query(
+          "INSERT INTO grade_details(result_id,registration_id,policy_id,attendance_score,midterm_score,exam_score,total_score) VALUES(?,?,?,?,?,?,?)",
+          [
+            id,
+            b.registrationId,
+            policy.id,
+            b.attendanceScore ?? null,
+            b.midtermScore ?? null,
+            b.examScore ?? null,
+            total,
+          ],
+        );
+        const item = await this.get(m, id, a);
+        await this.audit(m, a, "GRADE_CREATE", item, null, b.reference, b.note);
+        return this.details(m, id, a);
+      },
+      manager,
+    );
+  }
+  update(id: string, b: GradeWrite, a: GradeActor, manager?: EntityManager) {
+    return this.write(
+      a,
+      async (m) => {
+        const old = await this.lockResult(m, id, a);
+        if (old.revision !== b.revision)
+          throw new ConflictException("Bảng điểm vừa thay đổi. Hãy tải lại.");
+        if (old.state === "LEGACY")
+          throw new ConflictException(
+            "Kết quả cũ không có điểm thành phần; dùng điều chỉnh theo hồ sơ.",
+          );
+        if (old.state === "VOIDED")
+          throw new ConflictException(
+            "Bảng điểm đã hủy; mở lại trước khi nhập.",
+          );
+        await this.registration(
+          m,
+          old.registrationId,
+          a,
+          old.state === "FINALIZED",
+        );
+        const policy = await this.getPolicy(m, old.offeringId, true);
+        const total = calculateGrade(b, policy);
+        if (old.state === "FINALIZED" && total === null)
+          throw new BadRequestException(
+            "Điểm đã chốt phải đủ các thành phần có trọng số.",
+          );
+        await m.query(
+          "UPDATE grade_details SET attendance_score=?,midterm_score=?,exam_score=?,total_score=? WHERE result_id=?",
+          [
+            b.attendanceScore ?? null,
+            b.midtermScore ?? null,
+            b.examScore ?? null,
+            total,
+            id,
+          ],
+        );
+        if (old.state === "FINALIZED")
+          await this.publish(m, id, total, policy.passingScore, a);
+        else
+          await m.query(
+            "UPDATE student_course_results SET revision=revision+1,recorded_by=? WHERE id=?",
+            [a.id, id],
+          );
+        const item = await this.get(m, id, a);
+        await this.audit(
+          m,
+          a,
+          old.state === "FINALIZED" ? "GRADE_CORRECT" : "GRADE_UPDATE",
+          item,
+          old,
+          b.reference,
+          b.note,
+        );
+        return this.details(m, id, a);
+      },
+      manager,
+    );
   }
   private async publish(
     m: EntityManager,

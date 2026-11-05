@@ -29,7 +29,10 @@ export function PublicProgramDetail({ program }: { program: Detail }) {
       )}
       <dl className="my-8 grid gap-3 text-sm sm:grid-cols-2">
         {[
-          ["Niên khóa", String(program.cohortYear)],
+          [
+            "Niên khóa",
+            program.cohortYear ? String(program.cohortYear) : "Chưa công bố",
+          ],
           ["Thời gian đào tạo", program.duration],
           ["Số quyết định", program.decisionNumber],
           ["Ngày ban hành", program.decisionDate],
@@ -42,6 +45,31 @@ export function PublicProgramDetail({ program }: { program: Detail }) {
           </div>
         ))}
       </dl>
+      {program.sourceUrl && (
+        <section className="mb-8 rounded-xl border bg-emerald-50/50 p-5 space-y-3 text-sm">
+          <h2 className="font-bold">Chương trình công bố trên AGU</h2>
+          {program.sourceTotalCredits != null && (
+            <p>
+              Tổng tín chỉ theo nguồn:{" "}
+              <strong>{program.sourceTotalCredits} TC</strong>.
+            </p>
+          )}
+          <div className="flex gap-4 text-emerald-800 underline">
+            <a href={program.sourceUrl} target="_blank" rel="noreferrer">
+              Xem nội dung gốc
+            </a>
+            {program.sourceDocumentUrl && (
+              <a
+                href={program.sourceDocumentUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Mở tài liệu CTĐT
+              </a>
+            )}
+          </div>
+        </section>
+      )}
       <h2 className="mb-5 text-2xl font-bold">Khung chương trình đào tạo</h2>
       <div
         className="mb-6 flex flex-wrap gap-3"

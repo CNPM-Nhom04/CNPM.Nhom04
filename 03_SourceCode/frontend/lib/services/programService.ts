@@ -88,6 +88,14 @@ export interface ReviewInput {
   soBienBan: string;
 }
 export interface ProgramRecord extends ProgramInput {
+  sourceUrl?: string | null;
+  sourceDocumentUrl?: string | null;
+  sourceInstitution?: string | null;
+  sourceMajorCode?: string | null;
+  sourceTotalCredits?: number | null;
+  sourceRetrievedAt?: string | null;
+  sourceContent?: string | null;
+  sourceReadOnly?: boolean;
   id: string;
   programId: string;
   status: ProgramStatus;
@@ -155,6 +163,7 @@ export interface PageResult<T> {
 }
 export interface ProgramOptions {
   languageRequirements: string[];
+  itRequirements?: string[];
   canCreateProgram: boolean;
   levels: {
     id: string;

@@ -20,7 +20,7 @@ export function ProgramCard({
       </div>
       <div className="flex flex-1 flex-col p-6">
         <p className="text-xs font-semibold text-slate-500">
-          {program.code} · {program.versionCode}
+          {program.sourceMajorCode || program.code} · {program.versionCode}
         </p>
         <h3 className="mb-4 mt-3 text-xl font-bold leading-8 text-slate-900">
           <Link
@@ -36,7 +36,9 @@ export function ProgramCard({
         </p>
         <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4">
           <span className="text-sm text-slate-500">
-            Khóa {program.cohortYear}
+            {program.cohortYear
+              ? `Khóa ${program.cohortYear}`
+              : "Chưa công bố niên khóa"}
           </span>
           <Link
             aria-label={"Xem chương trình " + program.name}

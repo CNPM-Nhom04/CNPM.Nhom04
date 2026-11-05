@@ -111,6 +111,9 @@ export class AdminService {
   getSettings() {
     return this.repository.getSettings();
   }
+  getSettingsOptions() {
+    return this.repository.getSettingsOptions();
+  }
   saveSettings(settings: SettingsDto, actor: Actor) {
     for (const key of [
       "maxTinChiHocKy",
@@ -125,9 +128,22 @@ export class AdminService {
             ? 100
             : 999;
       if (Number(settings[key]) < 1 || Number(settings[key]) > upper)
-        throw new BadRequestException(`${key} phải từ 1 đến ${upper}.`);
+        throw new BadRequestException(
+          `${key === "thoiHanDangKyToiDa" ? "Thời hạn mở đăng ký học phần tối đa (ngày)" : key} phải từ 1 đến ${upper}${key === "thoiHanDangKyToiDa" ? " ngày" : ""}.`,
+        );
     }
-    return this.repository.saveSettings(settings, actor);
+    return this.repository.getSettingsOptions().then((options) => {
+      for (const [key, label] of [
+        ["ngoaiNguBatBuocThacSi", "Chuẩn ngoại ngữ Thạc sĩ"],
+        ["ngoaiNguBatBuocTienSi", "Chuẩn ngoại ngữ Tiến sĩ"],
+      ] as const) {
+        if (!options.languageRequirements.includes(settings[key]))
+          throw new BadRequestException(
+            `${label}: chọn giá trị trong danh sách chuẩn ngoại ngữ của hệ thống.`,
+          );
+      }
+      return this.repository.saveSettings(settings, actor);
+    });
   }
   resetSettings(actor: Actor) {
     return this.repository.saveSettings({ ...SETTING_DEFAULTS }, actor);

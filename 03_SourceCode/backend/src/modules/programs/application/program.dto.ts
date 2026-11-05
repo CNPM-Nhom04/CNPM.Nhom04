@@ -44,6 +44,10 @@ export class ProgramQueryDto {
   @IsOptional()
   @IsIn(["ALL", ...Object.keys(STATUS_LABELS)])
   selectedStatus?: string;
+  @ApiPropertyOptional({ enum: ["ALL", "MASTER", "DOCTOR"] })
+  @IsOptional()
+  @IsIn(["ALL", "MASTER", "DOCTOR"])
+  selectedLevel?: "ALL" | "MASTER" | "DOCTOR";
 }
 export class ProgramInputDto {
   @ApiPropertyOptional({ default: "v1" })

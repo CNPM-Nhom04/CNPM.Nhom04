@@ -66,3 +66,9 @@ coverage/
 # Keep the Next.js curriculum-builder source route (not generated build output).
 !/03_SourceCode/frontend/app/dashboard/chuong-trinh-dao-tao/**/build/
 !/03_SourceCode/frontend/app/dashboard/chuong-trinh-dao-tao/**/build/**
+
+# Private snapshots before catalog maintenance
+/artifacts/backups/
+
+# Local QA inventory and test evidence
+/artifacts/testing/

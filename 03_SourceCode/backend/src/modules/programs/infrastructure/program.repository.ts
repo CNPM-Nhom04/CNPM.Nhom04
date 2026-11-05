@@ -1,3 +1,4 @@
+import { isAllowedItRequirement } from "../domain/it-requirements";
 import {
   BadRequestException,
   ConflictException,
@@ -21,16 +22,24 @@ import {
 } from "../domain/program";
 import { validateCurriculum } from "../domain/validate-curriculum";
 
-const SCOPE = `EXISTS (SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
+const SCOPE = `p.deleted_at IS NULL AND EXISTS (SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
  us.scope_type='GLOBAL' OR (us.scope_type='PROGRAM' AND us.program_id=p.id)
  OR (us.scope_type='MAJOR' AND us.major_id=p.major_id)
  OR (us.scope_type='ORG_UNIT' AND EXISTS (SELECT 1 FROM organizational_unit_closure oc
    WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=p.managing_unit_id))))`;
+const READ_SCOPE = `p.deleted_at IS NULL AND (${SCOPE} OR cs.program_id IS NOT NULL)`;
+const LEVEL_FILTER =
+  "(?='ALL' OR e.level_code=? OR (?='DOCTOR' AND e.level_code='PHD'))";
 const FROM = ` FROM program_versions v JOIN training_programs p ON p.id=v.program_id
  JOIN education_levels e ON e.id=p.education_level_id JOIN organizational_units u ON u.id=p.managing_unit_id
- JOIN majors m ON m.id=p.major_id LEFT JOIN program_ui_details d ON d.program_version_id=v.id`;
+ JOIN majors m ON m.id=p.major_id LEFT JOIN program_ui_details d ON d.program_version_id=v.id
+ LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id
+ LEFT JOIN program_version_sources src ON src.program_version_id=v.id`;
 const SELECT =
-  `SELECT CAST(v.id AS CHAR) AS id, CAST(p.id AS CHAR) AS programId,
+  `SELECT src.source_url AS sourceUrl,src.document_url AS sourceDocumentUrl,src.total_credits AS sourceTotalCredits,
+ cs.institution_name AS sourceInstitution,cs.original_major_code AS sourceMajorCode,src.retrieved_at AS sourceRetrievedAt,
+ (src.program_version_id IS NOT NULL) AS sourceReadOnly,
+ CAST(v.id AS CHAR) AS id, CAST(p.id AS CHAR) AS programId,
  p.program_code AS maCTDT, v.version_code AS maPhienBan, v.cohort_year AS cohortYear,
  CAST(v.source_program_version_id AS CHAR) AS sourceVersionId,
  (SELECT source.version_code FROM program_versions source WHERE source.id=v.source_program_version_id) AS sourceVersionCode,
@@ -65,7 +74,10 @@ export class MysqlProgramRepository extends ProgramRepository {
       id: String(row.id),
       programId: String(row.programId),
       revision: Number(row.revision),
-      cohortYear: Number(row.cohortYear),
+      cohortYear: row.cohortYear == null ? undefined : Number(row.cohortYear),
+      sourceReadOnly: !!Number(row.sourceReadOnly),
+      sourceTotalCredits:
+        row.sourceTotalCredits == null ? null : Number(row.sourceTotalCredits),
       hasExtendedInfo: !!Number(row.hasExtendedInfo),
       ...Object.fromEntries(
         [
@@ -106,8 +118,20 @@ export class MysqlProgramRepository extends ProgramRepository {
   async list(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "",
       status = query.selectedStatus || "ALL";
-    const where = ` WHERE ${SCOPE} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
-    const params = [actor.id, status, status, search, search, search, search];
+    const where = ` WHERE ${READ_SCOPE} AND ${LEVEL_FILTER} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
+    const level = query.selectedLevel || "ALL";
+    const params = [
+      actor.id,
+      level,
+      level,
+      level,
+      status,
+      status,
+      search,
+      search,
+      search,
+      search,
+    ];
     const rows = await this.db.query(
       SELECT + where + " ORDER BY v.updated_at DESC,v.id DESC LIMIT ? OFFSET ?",
       [...params, query.limit, (query.page - 1) * query.limit],
@@ -118,10 +142,12 @@ export class MysqlProgramRepository extends ProgramRepository {
     );
     const total = Number(count.total);
     const [unversioned] = await this.db.query(
-      "SELECT COUNT(*) AS total FROM training_programs p WHERE " +
-        SCOPE +
+      "SELECT COUNT(*) AS total FROM training_programs p JOIN education_levels e ON e.id=p.education_level_id LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id WHERE " +
+        READ_SCOPE +
+        " AND " +
+        LEVEL_FILTER +
         " AND NOT EXISTS (SELECT 1 FROM program_versions v WHERE v.program_id=p.id)",
-      [actor.id],
+      [actor.id, level, level, level],
     );
     return {
       unversionedCount: Number(unversioned.total),
@@ -137,12 +163,13 @@ export class MysqlProgramRepository extends ProgramRepository {
   async unversioned(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "";
     const from = ` FROM training_programs p JOIN education_levels e ON e.id=p.education_level_id
-      JOIN organizational_units u ON u.id=p.managing_unit_id JOIN majors m ON m.id=p.major_id
-      WHERE ${SCOPE} AND NOT EXISTS(SELECT 1 FROM program_versions v WHERE v.program_id=p.id)
+      JOIN organizational_units u ON u.id=p.managing_unit_id JOIN majors m ON m.id=p.major_id LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id
+      WHERE ${READ_SCOPE} AND ${LEVEL_FILTER} AND NOT EXISTS(SELECT 1 FROM program_versions v WHERE v.program_id=p.id)
       AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,p.program_name)>0)`;
-    const params = [actor.id, search, search, search];
+    const level = query.selectedLevel || "ALL";
+    const params = [actor.id, level, level, level, search, search, search];
     const rows = await this.db.query(
-      `SELECT CAST(p.id AS CHAR) AS id,p.program_code AS maCTDT,
+      `SELECT cs.source_url sourceUrl,cs.original_major_code sourceMajorCode,(cs.program_id IS NOT NULL) sourceReadOnly,CAST(p.id AS CHAR) AS id,p.program_code AS maCTDT,
       p.program_name AS tenCTDT,e.level_name AS levelName,u.unit_name AS unitName,m.major_name AS majorName,
       p.status,p.description AS moTa` +
         from +
@@ -176,6 +203,34 @@ export class MysqlProgramRepository extends ProgramRepository {
       throw new NotFoundException(
         "Không tìm thấy chương trình trong phạm vi được phân quyền.",
       );
+    const [latest] = await this.db.query(
+      "SELECT CAST(id AS CHAR) id FROM program_versions WHERE program_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
+      [id],
+    );
+    if (latest) {
+      const previous = await this.detail(latest.id, actor);
+      const keys = [
+        "maCTDT",
+        "tenCTDT",
+        "tenTiengAnh",
+        "educationLevelId",
+        "managingUnitId",
+        "majorId",
+        "hinhThucDaoTao",
+        "thoiGianDaoTao",
+        "khoaTuyenSinh",
+        "tongTinChiYeuCau",
+        "chuanDauRaTiengAnh",
+        "chuanDauRaTinHoc",
+        "soQuyetDinhBanHanh",
+        "ngayBanHanh",
+        "moTa",
+      ];
+      return {
+        ...Object.fromEntries(keys.map((key) => [key, previous[key]])),
+        maPhienBan: (previous.maPhienBan || "v1").slice(0, 40) + "_moi",
+      } as unknown as ProgramInput;
+    }
     return {
       ...row,
       maPhienBan: "v1",
@@ -249,8 +304,24 @@ export class MysqlProgramRepository extends ProgramRepository {
        WHERE setting_key IN('training.ngoaiNguBatBuocThacSi','training.ngoaiNguBatBuocTienSi') AND TRIM(setting_value)<>''`,
       [actor.id],
     );
+    const itRows = await this.db.query(
+      `SELECT DISTINCT d.it_requirement value FROM program_ui_details d
+       JOIN program_versions v ON v.id=d.program_version_id JOIN training_programs p ON p.id=v.program_id
+       WHERE TRIM(COALESCE(d.it_requirement,''))<>'' AND ${SCOPE}`,
+      [actor.id],
+    );
     return {
       levels,
+      itRequirements: [
+        ...new Set<string>([
+          "Chuẩn kỹ năng sử dụng CNTT cơ bản",
+          "Chuẩn kỹ năng sử dụng CNTT nâng cao",
+          "Không yêu cầu",
+          ...itRows
+            .map((row) => String(row.value).trim())
+            .filter(isAllowedItRequirement),
+        ]),
+      ],
       languageRequirements: [
         ...new Set<string>(languageRows.map((row) => String(row.value).trim())),
       ].sort(),
@@ -259,6 +330,22 @@ export class MysqlProgramRepository extends ProgramRepository {
       canCreateProgram:
         !!actor.canCreateProgram && actor.permissions.includes("PROGRAM_EDIT"),
     };
+  }
+  async eligibleCourseIds(id: string, actor: ProgramActor): Promise<string[]> {
+    const program = await this.detail(id, actor);
+    // Course ownership is not a major mapping. Only approved curricula establish suitability.
+    const rows = await this.db.query(
+      `SELECT DISTINCT CAST(cc.course_id AS CHAR) AS courseId
+       FROM curriculum_courses cc
+       JOIN program_version_tracks t ON t.id=cc.program_version_track_id AND t.status='ACTIVE'
+       JOIN program_versions v ON v.id=t.program_version_id
+       JOIN training_programs p ON p.id=v.program_id
+       WHERE p.major_id=? AND p.education_level_id=?
+       AND v.status IN ('PUBLISHED','ARCHIVED') AND ${SCOPE}
+       AND EXISTS(SELECT 1 FROM vw_user_course_access ca WHERE ca.user_id=? AND ca.course_id=cc.course_id)`,
+      [program.majorId, program.educationLevelId, actor.id, actor.id],
+    );
+    return rows.map((row) => String(row.courseId));
   }
   async catalog(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "";
@@ -300,7 +387,9 @@ export class MysqlProgramRepository extends ProgramRepository {
     lock = false,
   ): Promise<ProgramItem> {
     const [row] = await manager.query(
-      SELECT + ` WHERE v.id=? AND ${SCOPE}` + (lock ? " FOR UPDATE" : ""),
+      SELECT +
+        ` WHERE v.id=? AND ${lock ? SCOPE : READ_SCOPE}` +
+        (lock ? " FOR UPDATE" : ""),
       [id, actor.id],
     );
     if (!row)
@@ -308,6 +397,16 @@ export class MysqlProgramRepository extends ProgramRepository {
         "Không tìm thấy CTĐT trong phạm vi được phân quyền.",
       );
     const item = this.map(row);
+    if (item.sourceUrl) {
+      const [source] = await manager.query(
+        "SELECT LEFT(content_text,200000) content FROM program_version_sources WHERE program_version_id=?",
+        [id],
+      );
+      const content = source?.content || "";
+      const heading = content.search(/^## Chương trình đào tạo /im);
+      item.sourceContent =
+        (heading >= 0 ? content.slice(heading) : content) || null;
+    }
     const tracks = await manager.query(
       "SELECT CAST(id AS CHAR) AS id,track_code_snapshot AS code,track_name_snapshot AS name,status,required_total_credits AS requiredCredits FROM program_version_tracks WHERE program_version_id=? ORDER BY id",
       [id],
@@ -461,6 +560,10 @@ export class MysqlProgramRepository extends ProgramRepository {
     return this.get(this.db.manager, id, actor);
   }
   private editable(item: ProgramItem, revision?: number) {
+    if (item.sourceReadOnly)
+      throw new ConflictException(
+        "Bản công bố AGU chỉ dùng để đối chiếu. Tạo phiên bản nội bộ mới nếu cần chỉnh sửa.",
+      );
     if (!["DRAFT", "RETURNED"].includes(item.status))
       throw new ConflictException(
         "Chỉ bản nháp hoặc bản bị trả về mới được chỉnh sửa.",
@@ -665,6 +768,17 @@ export class MysqlProgramRepository extends ProgramRepository {
       const [{ id }] = await manager.query(
         "SELECT CAST(LAST_INSERT_ID() AS CHAR) AS id",
       );
+      if (existingProgramId) {
+        const [source] = await manager.query(
+          "SELECT CAST(id AS CHAR) id FROM program_versions WHERE program_id=? AND id<>? ORDER BY created_at DESC,id DESC LIMIT 1",
+          [existingProgramId, id],
+        );
+        if (source)
+          await manager.query(
+            "UPDATE program_versions SET source_program_version_id=? WHERE id=?",
+            [source.id, id],
+          );
+      }
       await this.saveMetadata(manager, id, input);
       const tracks = await manager.query(
         `SELECT st.id,st.track_code,st.track_name FROM education_level_tracks et JOIN study_tracks st ON st.id=et.study_track_id

@@ -408,3 +408,17 @@ Migration dừng nếu gặp chương trình Đại học khác BIT/BBA, phiên 
 API options trả khoa/đơn vị ACTIVE trong phạm vi GLOBAL/ORG_UNIT ngay cả khi khoa chưa có ngành. Không dùng INNER JOIN ngành để làm mất khoa mới. Phạm vi MAJOR/PROGRAM vẫn chỉ trả đơn vị trong cặp ngành/CTĐT được cấp, không mở rộng sang khoa khác.
 
 Form yêu cầu chọn khoa trước; nếu khoa chưa có ngành ACTIVE sẽ thông báo nhờ Admin thêm ngành tại **Ngành đào tạo**, chọn đúng đơn vị. Nút **Tải lại danh mục** cập nhật lựa chọn sau khi Admin thêm ngành, giữ các thông tin form tạo mới đang nhập. Không tự tạo ngành giả hoặc dùng ngành của khoa khác để lưu CTĐT.
+
+### Nhập Excel chi tiết và tự chọn tín chỉ
+
+Màn hình `/dashboard/chuong-trinh-dao-tao/:id/build` có mục **Nhập học phần bằng Excel**:
+
+- `GET :id/import/mau-excel?trackId=...`: file mẫu có sheet `Nhap hoc phan`, các cột **Mã học phần, Mã nhóm, Tín chỉ, Tính chất, Học kỳ** và hướng dẫn mã nhóm của hướng đang xem.
+- `POST :id/import/kiem-tra?trackId=...`: multipart `file`, XLSX tối đa 5MB/1000 dòng. Yêu cầu `PROGRAM_EDIT`, đúng phạm vi CTĐT, trạng thái DRAFT/RETURNED và hướng hoạt động. Đối chiếu mã với phiên bản đã có trong hướng hoặc phiên bản ACTIVE truy cập được; kiểm tra trùng mã, tín chỉ, nhóm, tính chất, học kỳ, công thức và giới hạn tín chỉ nhóm. Chỉ trả xem trước, không ghi SQL.
+- **Áp dụng** thêm/cập nhật các môn trong tệp và giữ các môn khác; tự tính tín chỉ nhóm, sau đó **Lưu cấu trúc** qua API hiện có (kiểm tra revision). Nhóm cha không cộng định mức thêm lần nữa.
+- Tín chỉ nhóm cũng tự cập nhật khi thêm, bỏ hoặc chuyển nhóm môn. Có thể sửa định mức thủ công và bấm **Tự chọn môn đủ tín chỉ nhóm**: đối chiếu môn qua `GET :id/hoc-phan-phu-hop` với các CTĐT đã ban hành/lưu trữ cùng ngành và bậc đào tạo trong phạm vi truy cập; tìm tổng chính xác theo từng nhóm từ danh sách môn đã xếp nhóm. Giữ môn bắt buộc và các môn tiên quyết; môn tự chọn ngoài ngành bị loại, môn bắt buộc/tiên quyết chưa xác nhận đúng ngành thì báo lỗi. Nếu chưa có dữ liệu CTĐT đã ban hành để đối chiếu thì không tự chọn ngẫu nhiên. Không tìm được tổ hợp, vượt giới hạn nhóm, sai tổng hướng hoặc sai tỷ lệ tự chọn thì báo lỗi và giữ nguyên danh sách. Sau khi lưu, **Kiểm tra CTĐT** xác thực toàn bộ cấu trúc.
+- Chuẩn CNTT là danh sách lấy từ các giá trị đã lưu trong phạm vi được cấp, kèm các lựa chọn CNTT cơ bản/nâng cao và không yêu cầu. Loại MOS, ICDL, A1 (kể cả A 1) ở API options và giao diện, kể cả giá trị cũ. Giá trị cũ bị loại sẽ về chưa khai báo trong form và chỉ cập nhật CSDL khi người dùng lưu.
+
+Kiểm tra: backend `npm test -- --runInBand program-import.service.spec.ts validate-curriculum.spec.ts program-form-values.spec.ts`; frontend `node test/program-selection.test.cjs` và `npm run typecheck`.
+
+Màn hình chi tiết chia thành ba tab Học phần & tín chỉ / Nhập Excel / Thông tin & lịch sử. Bảng môn có tìm kiếm và lọc nhóm; thông tin học phần mở theo từng dòng để giảm chiều cao.

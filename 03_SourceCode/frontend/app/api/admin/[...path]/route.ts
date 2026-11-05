@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl, upstreamError } from "@/lib/server/backend";
 
 const allowed = [
+  { pattern: /^master-data\/import\/mau-excel$/, methods: ["GET"] },
+  {
+    pattern: /^master-data\/import\/(kiem-tra|luu)$/,
+    methods: ["POST"],
+    upload: true,
+  },
   {
     pattern: /^lop-hoc-vien\/[1-9]\d{0,19}\/lien-ket\/(tai-khoan|ho-so)$/,
     methods: ["GET"],
@@ -56,6 +62,7 @@ const allowed = [
     methods: ["PUT", "DELETE"],
   },
   { pattern: /^cau-hinh$/, methods: ["GET", "PUT"] },
+  { pattern: /^cau-hinh\/options$/, methods: ["GET"] },
   { pattern: /^cau-hinh\/mac-dinh$/, methods: ["POST"] },
   { pattern: /^audit-log(?:\/xuat-excel)?$/, methods: ["GET"] },
 ];

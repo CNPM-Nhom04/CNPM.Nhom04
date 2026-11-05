@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { FormEvent, useEffect, useState } from "react";
 import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui";
@@ -749,7 +750,18 @@ export default function DeTaiLuanVanPage() {
           </>
         }
       >
-        <form id="topic-form" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="topics"
+          onImported={() => {
+            setEditing(null);
+            setDetail(null);
+            refresh();
+          }}
+          recordKey={editing && editing !== "new" ? editing.id : "new"}
+          id="topic-form"
+          onSubmit={save}
+          className="space-y-4"
+        >
           {formError && (
             <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
               {formError}
@@ -930,7 +942,7 @@ export default function DeTaiLuanVanPage() {
             tra hồ sơ chuyên môn thật; hệ thống chưa có quy định học hàm/hạn mức
             GVHD để tự đánh giá.
           </p>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
       <Modal
         isOpen={profileOpen}
@@ -958,7 +970,16 @@ export default function DeTaiLuanVanPage() {
           </>
         }
       >
-        <form id="supervisor-form" onSubmit={saveProfile} className="space-y-4">
+        <ExcelOnlyForm
+          resource="supervisors"
+          onImported={() => {
+            setProfileOpen(false);
+            refresh();
+          }}
+          id="supervisor-form"
+          onSubmit={saveProfile}
+          className="space-y-4"
+        >
           {(profileError || unitsError) && (
             <p role="alert" className="text-red-700">
               {profileError || unitsError}
@@ -1023,7 +1044,7 @@ export default function DeTaiLuanVanPage() {
             Nhập theo hồ sơ thật. Thông tin chuyên môn chưa có thì để trống. Hồ
             sơ GVHD không tự tạo tài khoản đăng nhập hoặc cấp quyền.
           </p>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
       <Modal
         isOpen={!!action}
@@ -1046,7 +1067,15 @@ export default function DeTaiLuanVanPage() {
           </>
         }
       >
-        <form id="topic-action" onSubmit={submitAction} className="space-y-4">
+        <ExcelOnlyForm
+          recordLabel={
+            detail ? `${detail.studentCode} — ${detail.title}` : undefined
+          }
+          recordKey={detail?.id + ":" + action}
+          id="topic-action"
+          onSubmit={submitAction}
+          className="space-y-4"
+        >
           <p className="font-medium">{detail?.title}</p>
           {actionError && (
             <p role="alert" className="text-red-700">
@@ -1084,7 +1113,7 @@ export default function DeTaiLuanVanPage() {
           <p className="text-sm text-slate-600">
             Thao tác lưu người thực hiện, thời điểm và nội dung vào lịch sử SQL.
           </p>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

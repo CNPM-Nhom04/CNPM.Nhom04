@@ -1,3 +1,8 @@
+import { GradeRosterService } from "../application/grade-roster.service";
+import { GradeExcelService } from "../application/grade-excel.service";
+import { XLSX_MIME } from "../../../core/excel/workbook";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { StreamableFile, UploadedFile, UseInterceptors } from "@nestjs/common";
 import {
   Body,
   Controller,
@@ -28,7 +33,123 @@ import { GradeGuard, GradePermission, GradeRequest } from "./grade.guard";
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 @Controller("quan-ly-diem")
 export class GradeController {
-  constructor(private readonly service: GradeService) {}
+  constructor(
+    private readonly service: GradeService,
+    private readonly excel: GradeExcelService,
+    private readonly roster: GradeRosterService,
+  ) {}
+  @Get("excel/chuan-bi")
+  @GradePermission()
+  preparation(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @Req() r: GradeRequest,
+  ) {
+    return this.roster.data(classId, termId, r.gradeActor);
+  }
+  @Get("excel/danh-sach-mau")
+  @GradePermission()
+  async rosterTemplate(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @Query("prefill") prefill: string,
+    @Req() r: GradeRequest,
+  ) {
+    return new StreamableFile(
+      await this.roster.template(
+        classId,
+        termId,
+        r.gradeActor,
+        prefill === "1",
+      ),
+      {
+        type: XLSX_MIME,
+        disposition: 'attachment; filename="Danh_sach_hoc.xlsx"',
+      },
+    );
+  }
+  @Post("excel/danh-sach-kiem-tra")
+  @GradePermission()
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  rosterPreview(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @UploadedFile() file: any,
+    @Req() r: GradeRequest,
+  ) {
+    return this.roster.import(classId, termId, file, r.gradeActor, false);
+  }
+  @Post("excel/danh-sach-luu")
+  @GradePermission()
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  rosterSave(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @UploadedFile() file: any,
+    @Req() r: GradeRequest,
+  ) {
+    return this.roster.import(classId, termId, file, r.gradeActor, true);
+  }
+  @Get("excel/options") excelOptions(@Req() r: GradeRequest) {
+    return this.excel.options(r.gradeActor);
+  }
+  @Get("excel/rows") excelRows(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @Req() r: GradeRequest,
+  ) {
+    return this.excel.rows(classId, termId, r.gradeActor);
+  }
+  @Get("excel/mau")
+  @GradePermission()
+  async excelTemplate(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @Req() r: GradeRequest,
+  ) {
+    return new StreamableFile(
+      await this.excel.template(classId, termId, r.gradeActor),
+      { type: XLSX_MIME, disposition: 'attachment; filename="Bang_diem.xlsx"' },
+    );
+  }
+  @Post("excel/kiem-tra")
+  @GradePermission()
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  excelPreview(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @UploadedFile() file: any,
+    @Req() r: GradeRequest,
+  ) {
+    return this.excel.import(classId, termId, file, r.gradeActor, false);
+  }
+  @Post("excel/luu")
+  @GradePermission()
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  excelSave(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @UploadedFile() file: any,
+    @Req() r: GradeRequest,
+  ) {
+    return this.excel.import(classId, termId, file, r.gradeActor, true);
+  }
   @Get()
   @ApiOperation({
     summary: "Tất cả kết quả SQL, kể cả miễn học phần và dữ liệu lịch sử",
@@ -60,19 +181,6 @@ export class GradeController {
   }
   @Get(":id") detail(@Param("id") id: string, @Req() r: GradeRequest) {
     return this.service.detail(id, r.gradeActor);
-  }
-  @Post() @GradePermission() create(
-    @Body() b: CreateGradeDto,
-    @Req() r: GradeRequest,
-  ) {
-    return this.service.create(b, r.gradeActor);
-  }
-  @Post(":id/cap-nhat") @GradePermission() update(
-    @Param("id") id: string,
-    @Body() b: UpdateGradeDto,
-    @Req() r: GradeRequest,
-  ) {
-    return this.service.update(id, b, r.gradeActor);
   }
   @Post(":id/chot") @GradePermission() finalize(
     @Param("id") id: string,

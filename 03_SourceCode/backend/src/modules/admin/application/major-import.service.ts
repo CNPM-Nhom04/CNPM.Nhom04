@@ -1,3 +1,4 @@
+import { addExampleSheet } from "../../../core/excel/examples";
 import {
   BadRequestException,
   Injectable,
@@ -47,15 +48,57 @@ export class MajorImportService {
     units.addRow(["Mã đơn vị", "Tên đơn vị"]);
     options.units.forEach((unit) => units.addRow([unit.code, unit.name]));
     units.columns = [{ width: 25 }, { width: 65 }];
+    const previous = book.addWorksheet("Du lieu hien co");
+    previous.addRow(MAJOR_HEADERS);
+    previous.columns = [
+      { width: 22 },
+      { width: 48 },
+      { width: 28 },
+      { width: 18 },
+    ];
+    for (let page = 1; ; page++) {
+      const result = await this.repository.listMajors({
+        page,
+        limit: 100,
+        searchTerm: "",
+        status: "ALL",
+        unitId: "",
+      });
+      for (const major of result.data)
+        previous.addRow([
+          major.majorCode,
+          major.majorName,
+          major.unitCode,
+          major.status,
+        ]);
+      if (page >= result.meta.totalPages) break;
+    }
     const guide = book.addWorksheet("Huong dan");
     [
-      "Nhập dữ liệu vào sheet Nganh dao tao, giữ nguyên bốn tiêu đề.",
+      "Mẫu chứa danh mục phiên bản hiện có trong sheet Du lieu hien co để đối chiếu; sheet này không bị ghi đè khi thêm mới.",
+      "Nhập ngành mới vào sheet Nganh dao tao, giữ nguyên bốn tiêu đề. Sửa ngành có sẵn bằng chức năng sửa qua Excel của từng ngành.",
       "Mã đơn vị quản lý: lấy từ sheet Don vi tu CSDL. Backend kiểm tra lại CSDL khi lưu.",
       "Chỉ thêm ngành mới; mã đã có không bị ghi đè. Mã có số 0 đầu phải giữ định dạng Text.",
       "Trạng thái: ACTIVE (hoạt động) hoặc INACTIVE (ngừng sử dụng). Không dùng công thức.",
       `Tối đa ${limits.maxRows} dòng, ${limits.maxFileBytes / 1024 / 1024} MB. Toàn bộ file chỉ lưu khi không có dòng lỗi.`,
     ].forEach((line) => guide.addRow([line]));
     guide.getColumn(1).width = 120;
+    addExampleSheet(
+      book,
+      sheet,
+      options.units.length
+        ? [["VD_NGANH_001", "Ngành minh họa", options.units[0].code, "ACTIVE"]]
+        : [],
+      [
+        "Nhập ngành mới tại sheet Nganh dao tao. Mã ngành VD_NGANH_001 và tên ngành chỉ minh họa; thay bằng mã/tên ngành thực tế chưa tồn tại.",
+        "Mã đơn vị phải lấy từ sheet Don vi tu CSDL; trạng thái chỉ ACTIVE hoặc INACTIVE. Không dùng tên đơn vị thay cho mã.",
+        ...(!options.units.length
+          ? [
+              "Chưa có đơn vị quản lý hợp lệ; cấu hình khoa trước khi nhập ngành.",
+            ]
+          : []),
+      ],
+    );
     return Buffer.from(await book.xlsx.writeBuffer());
   }
   private async parse(file?: MajorUpload) {

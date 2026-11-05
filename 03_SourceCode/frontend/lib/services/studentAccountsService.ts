@@ -69,6 +69,7 @@ export interface ClassMember {
   assignmentMatchesClass: boolean;
 }
 export interface AccountPreview {
+  unchangedRows?: number;
   class: StudentClass;
   previewHash: string;
   classRevision: number;

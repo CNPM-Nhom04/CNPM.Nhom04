@@ -9,19 +9,41 @@ const date = (value?: string | null) =>
   value
     ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
     : "—";
-export function ProgramCourseDetails({ course }: { course: ProgramCourse }) {
+export function ProgramCourseDetails({
+  course,
+  compact = false,
+}: {
+  course: ProgramCourse;
+  compact?: boolean;
+}) {
   return (
     <div className="space-y-1">
-      <p className="text-xs text-slate-500">
-        Phiên bản học phần: {course.versionNumber ?? "—"} · LT{" "}
-        {course.theoryHours ?? "—"} / TH {course.practiceHours ?? "—"} tiết
-      </p>
+      {!compact && (
+        <p className="text-xs text-slate-500">
+          Phiên bản học phần: {course.versionNumber ?? "—"} · LT{" "}
+          {course.theoryHours ?? "—"} / TH {course.practiceHours ?? "—"} tiết
+        </p>
+      )}
       <details className="text-xs">
         <summary className="cursor-pointer text-blue-700">
-          Tiên quyết ({course.prerequisites?.length ?? 0}) · Liên kết PLO (
-          {course.ploMappings?.length ?? 0}) · Thông tin học phần
+          {compact ? (
+            "Chi tiết môn"
+          ) : (
+            <>
+              {" "}
+              Tiên quyết ({course.prerequisites?.length ?? 0}) · Liên kết PLO (
+              {course.ploMappings?.length ?? 0}) · Thông tin học phần
+            </>
+          )}
         </summary>
         <div className="mt-2 space-y-2 rounded border bg-slate-50 p-3">
+          {compact && (
+            <p>
+              Phiên bản {course.versionNumber ?? "—"} · LT{" "}
+              {course.theoryHours ?? "—"} / TH {course.practiceHours ?? "—"}{" "}
+              tiết
+            </p>
+          )}
           {course.englishName && <p>Tên tiếng Anh: {course.englishName}</p>}
           {course.description && (
             <p className="whitespace-pre-line">{course.description}</p>

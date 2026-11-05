@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import { GraduationCap, Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { MajorImportModal } from "@/components/admin/MajorImportModal";
@@ -394,7 +395,17 @@ export default function MajorsPage() {
           </>
         }
       >
-        <form id="major-form" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="majors"
+          onImported={() => {
+            setOpen(false);
+            refresh();
+          }}
+          recordKey={String(editing?.id || "new")}
+          id="major-form"
+          onSubmit={save}
+          className="space-y-4"
+        >
           <AdminFeedback error={mutationError} />
           {locked && (
             <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">
@@ -475,7 +486,7 @@ export default function MajorsPage() {
             </p>
           )}
           {unitsLoading && <p>Đang tải đơn vị...</p>}
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

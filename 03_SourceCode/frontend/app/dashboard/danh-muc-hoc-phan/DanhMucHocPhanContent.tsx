@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { FormEvent, useEffect, useState } from "react";
 import { BookOpen, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui";
@@ -230,11 +231,20 @@ export default function DanhMucHocPhanContent() {
         disabled={busy}
         onChange={(e) => {
           e.target.setCustomValidity("");
-          if (key === "effectiveFrom") e.target.form?.querySelector<HTMLInputElement>('input[aria-label="Ngày kết thúc hiệu lực"]')?.setCustomValidity("");
+          if (key === "effectiveFrom")
+            e.target.form
+              ?.querySelector<HTMLInputElement>(
+                'input[aria-label="Ngày kết thúc hiệu lực"]',
+              )
+              ?.setCustomValidity("");
           set(key, e.target.value);
         }}
         onKeyDown={(e) => {
-          if (key === "credits" && [".", ",", "e", "E", "-", "+"].includes(e.key)) e.preventDefault();
+          if (
+            key === "credits" &&
+            [".", ",", "e", "E", "-", "+"].includes(e.key)
+          )
+            e.preventDefault();
         }}
         onInvalid={(e) => {
           if (key === "credits")
@@ -575,7 +585,18 @@ export default function DanhMucHocPhanContent() {
           </>
         }
       >
-        <form id="course-form" onSubmit={save} className="space-y-4">
+        <ExcelOnlyForm
+          resource="courses"
+          onImported={() => {
+            setEditing(null);
+            setSelected(null);
+            setReload((n) => n + 1);
+          }}
+          recordKey={editing && editing !== "new" ? editing.id : "new"}
+          id="course-form"
+          onSubmit={save}
+          className="space-y-4"
+        >
           {formError && (
             <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
               {formError}
@@ -672,7 +693,7 @@ export default function DanhMucHocPhanContent() {
             đến 15; không tự quy đổi tín chỉ thành tiết. Ngày kết thúc phải sau
             ngày bắt đầu hiệu lực.
           </p>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

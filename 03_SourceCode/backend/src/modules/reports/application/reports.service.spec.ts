@@ -76,6 +76,23 @@ describe("ReportsService", () => {
     expect(sheet.getCell("G2").value).toBe("Đã ban hành");
   });
 
+  it("exports unknown credits as blank and retains zero as numeric zero", async () => {
+    repository.findAll.mockResolvedValue([
+      {
+        ...item,
+        tongTinChi: null,
+        sourceUrl: "https://pgd.agu.edu.vn/trainings/majors/programme/40",
+      },
+      { ...item, tongTinChi: 0 },
+    ]);
+    const workbook = new Workbook();
+    await workbook.xlsx.load((await service.exportExcel({})) as never);
+    const sheet = workbook.worksheets[0];
+    expect(sheet.getCell("E2").value).toBeNull();
+    expect(sheet.getCell("E3").value).toBe(0);
+    expect(sheet.getCell("H2").text).toContain("pgd.agu.edu.vn");
+  });
+
   it("exports headers even when no programs match", async () => {
     repository.findAll.mockResolvedValue([]);
     const workbook = new Workbook();

@@ -1,6 +1,8 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { isAllowedItRequirement } from "@/lib/programs/it-requirements";
 import { useSessionUser } from "@/components/auth/SessionProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save, BookOpen, Award, Clock } from "lucide-react";
@@ -79,6 +81,9 @@ export function ProgramForm() {
           setForm({
             ...empty,
             ...item,
+            chuanDauRaTinHoc: isAllowedItRequirement(item.chuanDauRaTinHoc)
+              ? item.chuanDauRaTinHoc
+              : "",
             ngayBanHanh: item.ngayBanHanh || undefined,
           });
       })
@@ -192,7 +197,16 @@ export function ProgramForm() {
           Phiên bản này không được phép chỉnh sửa.
         </p>
       )}
-      <form onSubmit={save}>
+      <ExcelOnlyForm
+        resource="programs"
+        baseId={baseId || undefined}
+        onImported={() => {
+          router.push("/dashboard/chuong-trinh-dao-tao");
+          router.refresh();
+        }}
+        recordKey={editId || baseId || "new"}
+        onSubmit={save}
+      >
         <fieldset
           disabled={loading || saving || !options || !editable}
           className="space-y-6"
@@ -533,7 +547,41 @@ export function ProgramForm() {
                   CSDL; chọn theo quy định của CTĐT.
                 </p>
               </div>
-              {text("chuanDauRaTinHoc", "Bằng CNTT (yêu cầu đầu ra)", 500)}
+              <div className="space-y-1.5">
+                <label htmlFor="it-requirement" className="text-xs font-bold">
+                  Chuẩn CNTT (yêu cầu đầu ra)
+                </label>
+                <select
+                  id="it-requirement"
+                  className={fieldClass}
+                  value={
+                    isAllowedItRequirement(form.chuanDauRaTinHoc)
+                      ? form.chuanDauRaTinHoc
+                      : ""
+                  }
+                  onChange={(event) =>
+                    setForm({ ...form, chuanDauRaTinHoc: event.target.value })
+                  }
+                >
+                  <option value="">Chưa khai báo</option>
+                  {[
+                    ...new Set([
+                      ...(options?.itRequirements || [
+                        "Chuẩn kỹ năng sử dụng CNTT cơ bản",
+                        "Chuẩn kỹ năng sử dụng CNTT nâng cao",
+                        "Không yêu cầu",
+                      ]),
+                      ...(form.chuanDauRaTinHoc ? [form.chuanDauRaTinHoc] : []),
+                    ]),
+                  ]
+                    .filter(isAllowedItRequirement)
+                    .map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                </select>
+              </div>
               {text("soQuyetDinhBanHanh", "Số quyết định ban hành", 150)}
               {text("ngayBanHanh", "Ngày ban hành / hiệu lực", 10, "date")}
               <p className="md:col-span-2 text-xs text-slate-500">
@@ -571,7 +619,7 @@ export function ProgramForm() {
             </div>
           </section>
         </fieldset>
-      </form>
+      </ExcelOnlyForm>
     </div>
   );
 }

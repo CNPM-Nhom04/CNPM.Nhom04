@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   graduationService,
@@ -72,7 +73,9 @@ function EvidenceForm({
     }
   }
   return (
-    <form
+    <ExcelOnlyForm
+      recordLabel={`${data.input.studentCode} — ${data.input.studentName}`}
+      recordKey={data.input.assignmentId}
       onSubmit={save}
       className="space-y-4 rounded-xl border border-slate-200 p-4"
     >
@@ -226,7 +229,7 @@ function EvidenceForm({
           {busy ? "Đang lưu..." : "Lưu xác minh vào SQL"}
         </button>
       </fieldset>
-    </form>
+    </ExcelOnlyForm>
   );
 }
 function describeHistory(value: unknown) {

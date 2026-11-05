@@ -2,6 +2,7 @@ export interface GradeActor {
   id: string;
   username: string;
   canManage: boolean;
+  canPrepare?: boolean;
   ip: string;
 }
 export interface GradeQuery {
@@ -42,6 +43,38 @@ export interface LegacyWrite {
   reference: string;
 }
 export abstract class GradeRepository {
+  abstract preparation(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    manager?: unknown,
+  ): Promise<any>;
+  abstract prepareRegistrations(
+    classId: string,
+    termId: string,
+    rows: {
+      studentCode: string;
+      offeringId: string;
+      note: string;
+      reference: string;
+    }[],
+    a: GradeActor,
+    apply: boolean,
+  ): Promise<any>;
+  abstract excelOptions(a: GradeActor): Promise<any>;
+  abstract excelRows(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    manager?: unknown,
+  ): Promise<any[]>;
+  abstract importRows(
+    classId: string,
+    termId: string,
+    rows: any[],
+    a: GradeActor,
+    apply: boolean,
+  ): Promise<any>;
   abstract list(q: GradeQuery, a: GradeActor): Promise<any>;
   abstract detail(id: string, a: GradeActor): Promise<any>;
   abstract classes(q: GradeQuery, a: GradeActor): Promise<any>;

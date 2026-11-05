@@ -1,3 +1,6 @@
+import { AdminReportExport1794200000000 } from "./migrations/1794200000000-AdminReportExport";
+import { AguProgramCatalog1794100000000 } from "./migrations/1794100000000-AguProgramCatalog";
+import { LecturerGradeRead1794000000000 } from "./migrations/1794000000000-LecturerGradeRead";
 import { RemoveBachelorDemo1793746800000 } from "./migrations/1793746800000-RemoveBachelorDemo";
 import { DoctoralEducationLevel1793743200000 } from "./migrations/1793743200000-DoctoralEducationLevel";
 import { StudentClasses1793700000000 } from "./migrations/1793700000000-StudentClasses";
@@ -39,6 +42,9 @@ export default new DataSource({
     StudentClasses1793700000000,
     DoctoralEducationLevel1793743200000,
     RemoveBachelorDemo1793746800000,
+    LecturerGradeRead1794000000000,
+    AguProgramCatalog1794100000000,
+    AdminReportExport1794200000000,
   ],
   migrationsTransactionMode: "none",
 });

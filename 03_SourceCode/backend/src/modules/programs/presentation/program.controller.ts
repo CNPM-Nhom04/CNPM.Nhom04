@@ -1,3 +1,4 @@
+import { ProgramImportService } from "../application/program-import.service";
 import { ProgramExportService } from "../application/program-export.service";
 import { XLSX_MIME } from "../../../core/excel/workbook";
 import {
@@ -76,6 +77,7 @@ export class ProgramController {
   constructor(
     private readonly service: ProgramService,
     private readonly exporter: ProgramExportService,
+    private readonly importer: ProgramImportService,
   ) {}
   private result(item: ProgramItem, actor: ProgramActor) {
     return { ...item, permissions: permissions(actor, item) };
@@ -177,6 +179,46 @@ export class ProgramController {
   ) {
     return this.result(
       await this.service.structure(id, body, req.programActor),
+      req.programActor,
+    );
+  }
+  @Get(":id/hoc-phan-phu-hop")
+  @ProgramPermission("PROGRAM_EDIT")
+  eligibleCourseIds(@Param("id") id: string, @Req() req: ProgramRequest) {
+    return this.service.eligibleCourseIds(id, req.programActor);
+  }
+  @Get(":id/import/mau-excel")
+  @ProgramPermission("PROGRAM_EDIT")
+  async importTemplate(
+    @Param("id") id: string,
+    @Query() query: ProgramExportQueryDto,
+    @Req() req: ProgramRequest,
+  ) {
+    return new StreamableFile(
+      await this.importer.template(id, query.trackId || "", req.programActor),
+      {
+        type: XLSX_MIME,
+        disposition: 'attachment; filename="Nhap_CTDT.xlsx"',
+      },
+    );
+  }
+  @Post(":id/import/kiem-tra")
+  @ProgramPermission("PROGRAM_EDIT")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  async importPreview(
+    @Param("id") id: string,
+    @Query() query: ProgramExportQueryDto,
+    @UploadedFile() file: ProgramUpload,
+    @Req() req: ProgramRequest,
+  ) {
+    return this.importer.preview(
+      id,
+      query.trackId || "",
+      file,
       req.programActor,
     );
   }

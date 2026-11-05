@@ -9,7 +9,8 @@ export interface ReportItem {
   tenCTDT: string;
   bacDaoTao: string;
   khoaQuanLy: string;
-  tongTinChi: number;
+  tongTinChi: number | null;
+  sourceUrl?: string | null;
   soHocVien: number;
   trangThai: string;
   status: string | null;
@@ -31,4 +32,3 @@ export interface ReportRepository {
   getSummary(filter: ReportFilter): Promise<ReportSummary>;
   getDegrees(): Promise<{ value: string; label: string }[]>;
 }
- 

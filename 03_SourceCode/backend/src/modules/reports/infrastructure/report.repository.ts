@@ -20,14 +20,16 @@ const STATUS_LABELS: Record<string, string> = {
 // One row per program; the latest version is ordered by cohort, creation time, ID.
 // Aggregate tracks and assignments separately to avoid multiplying student counts.
 const BASE_QUERY = `
-  SELECT CAST(p.id AS CHAR) AS id, p.program_code AS maCTDT,
+  SELECT CAST(p.id AS CHAR) AS id, COALESCE(cs.original_major_code,p.program_code) AS maCTDT,
     COALESCE(v.program_name_snapshot, p.program_name) AS tenCTDT,
     e.level_name AS bacDaoTao, u.unit_name AS khoaQuanLy,
     CAST(v.id AS CHAR) AS programVersionId, v.status AS status,
-    COALESCE((
+    COALESCE(src.source_url,cs.source_url) AS sourceUrl,
+    (src.program_version_id IS NOT NULL) AS isSourceVersion,
+    CASE WHEN cs.program_id IS NOT NULL THEN src.total_credits ELSE COALESCE(d.required_total_credits,(
       SELECT MAX(t.required_total_credits) FROM program_version_tracks t
       WHERE t.program_version_id = v.id AND t.status = 'ACTIVE'
-    ), 0) AS tongTinChi,
+    ), 0) END AS tongTinChi,
     (SELECT COUNT(DISTINCT a.student_id)
       FROM student_program_assignments a
       JOIN program_version_tracks t ON t.id = a.program_version_track_id
@@ -38,13 +40,17 @@ const BASE_QUERY = `
   JOIN education_levels e ON e.id = p.education_level_id
   JOIN organizational_units u ON u.id = p.managing_unit_id
   LEFT JOIN program_versions v ON v.id = (
-    SELECT latest.id FROM program_versions latest WHERE latest.program_id = p.id
-    ORDER BY latest.cohort_year DESC, latest.created_at DESC, latest.id DESC LIMIT 1
+    SELECT latest.id FROM program_versions latest
+    LEFT JOIN program_version_sources ls ON ls.program_version_id=latest.id WHERE latest.program_id = p.id
+    ORDER BY ls.source_programme_id DESC, latest.cohort_year DESC, latest.created_at DESC, latest.id DESC LIMIT 1
   )
-  WHERE (? = '' OR LOCATE(LOWER(?), LOWER(p.program_code)) > 0
+  LEFT JOIN program_ui_details d ON d.program_version_id=v.id
+  LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id
+  LEFT JOIN program_version_sources src ON src.program_version_id=v.id
+  WHERE p.deleted_at IS NULL AND (? = '' OR LOCATE(LOWER(?), LOWER(p.program_code)) > 0
     OR LOCATE(LOWER(?), LOWER(COALESCE(v.program_name_snapshot, p.program_name))) > 0)
     AND (? = 'ALL' OR e.level_code = ? OR e.level_name = ?)
-    AND (? IS NULL OR EXISTS (
+    AND (? IS NULL OR cs.program_id IS NOT NULL OR EXISTS (
       SELECT 1 FROM user_scopes s WHERE s.user_id=? AND (
         s.scope_type='GLOBAL'
         OR (s.scope_type='ORG_UNIT' AND EXISTS (SELECT 1 FROM organizational_unit_closure cl WHERE cl.ancestor_id=s.organizational_unit_id AND cl.descendant_id=p.managing_unit_id))
@@ -90,9 +96,11 @@ export class MysqlReportRepository implements ReportRepository {
       id: String(row.id),
       programVersionId:
         row.programVersionId == null ? null : String(row.programVersionId),
-      tongTinChi: Number(row.tongTinChi),
+      tongTinChi: row.tongTinChi == null ? null : Number(row.tongTinChi),
       soHocVien: Number(row.soHocVien),
-      trangThai: STATUS_LABELS[row.status] ?? "Chưa có phiên bản",
+      trangThai: Number(row.isSourceVersion)
+        ? "Công bố trên AGU"
+        : (STATUS_LABELS[row.status] ?? "Chưa có phiên bản"),
     }));
   }
 
@@ -124,7 +132,7 @@ export class MysqlReportRepository implements ReportRepository {
 
   async getDegrees(): Promise<{ value: string; label: string }[]> {
     return this.dataSource.query(
-      "SELECT level_code AS value, level_name AS label FROM education_levels ORDER BY level_name, id",
+      "SELECT level_code AS value, level_name AS label FROM education_levels WHERE status='ACTIVE' ORDER BY level_name, id",
     );
   }
 }

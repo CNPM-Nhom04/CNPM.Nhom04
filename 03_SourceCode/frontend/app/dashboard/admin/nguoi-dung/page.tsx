@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 
 import { useRouter } from "next/navigation";
 import { useSessionUser } from "@/components/auth/SessionProvider";
@@ -401,7 +402,18 @@ export default function NguoiDungPage() {
           </>
         }
       >
-        <form id="user-form" onSubmit={handleSaveUser} className="space-y-4">
+        <ExcelOnlyForm
+          resource="users"
+          onImported={() => {
+            setIsModalOpen(false);
+            list.refresh();
+            router.refresh();
+          }}
+          recordKey={String(editingItem?.id || "new")}
+          id="user-form"
+          onSubmit={handleSaveUser}
+          className="space-y-4"
+        >
           <AdminFeedback error={mutationError} />
           {!editingItem && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -602,7 +614,7 @@ export default function NguoiDungPage() {
             />
             Tài khoản hoạt động
           </label>
-        </form>
+        </ExcelOnlyForm>
       </Modal>
     </div>
   );

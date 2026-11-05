@@ -1,4 +1,5 @@
 "use client";
+import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
@@ -178,7 +179,9 @@ export function StudentAccountLink({
         </>
       }
     >
-      <form
+      <ExcelOnlyForm
+        recordLabel={`${item.code} — ${item.name}`}
+        recordKey={item.id}
         id="student-account-link"
         onSubmit={save}
         className="space-y-4 text-sm text-slate-950"
@@ -411,7 +414,7 @@ export function StudentAccountLink({
           />
           Tôi đã xác minh tài khoản, hồ sơ và lớp/CTĐT này thuộc đúng học viên.
         </label>
-      </form>
+      </ExcelOnlyForm>
     </Modal>
   );
 }

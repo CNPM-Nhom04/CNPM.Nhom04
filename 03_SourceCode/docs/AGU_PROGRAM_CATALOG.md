@@ -1,0 +1,40 @@
+# Danh mục CTĐT từ AGU
+
+Nguồn: https://pgd.agu.edu.vn/trainings/majors, đọc ngày 05/11/2026. Bản lưu văn bản nằm ở `artifacts/agu-source`: danh sách 18 mục ngành, 38 trang chương trình và các PDF đính kèm đọc được. Bao gồm ngành do AGU đào tạo, chương trình liên thông và danh mục trường liên kết; 6 mục trường liên kết chưa có phiên bản trên trang nguồn. Trang này công bố đào tạo thạc sĩ, không có căn cứ để tạo CTĐT tiến sĩ.
+
+## Dữ liệu và nguồn
+
+Migration `AguProgramCatalog1794100000000` bổ sung dấu xóa danh mục và bảng nguồn. `program_catalog_sources` ghi ngành/trường/mã gốc; `program_version_sources` ghi URL, tài liệu, thời điểm đọc, hash và nội dung trích xuất. Mã `AGU-<id>` là mã định danh nội bộ của bản nhập, không phải mã phiên bản do trường công bố. Giao diện hiển thị mã ngành gốc.
+
+Mỗi bản nguồn bắt đầu ở DRAFT theo trigger hiện có; không giả lập gửi duyệt/phê duyệt. Bản nguồn chỉ đọc, có nhãn Công bố trên AGU và đường dẫn gốc. Các bản công khai AGU có thể đọc ở danh mục dashboard/cổng thông tin; ngoại lệ đọc này không áp dụng cho khóa ghi hoặc tạo phiên bản. Ghi dữ liệu nội bộ tiếp tục yêu cầu phạm vi SQL của tài khoản. Bộ lọc bậc đào tạo áp dụng phía SQL cho dữ liệu, tổng số và phân trang của cả danh sách phiên bản và danh sách chưa có phiên bản; DOCTOR nhận cả mã DOCTOR/PHD.
+
+Tín chỉ/thời gian/niên khóa chỉ lấy khi có thông tin nguồn rõ ràng. Chưa đọc được số tín chỉ hoặc tài liệu scan thì để NULL và liên kết về tài liệu gốc. Bản trích trên dashboard giới hạn 200.000 ký tự; tài liệu gốc có toàn bộ nội dung. Không tự chia học phần thành A–D hay đoán loại bắt buộc/tự chọn từ bảng bị mất định dạng. Các cấu trúc học phần có thể xem trong nguồn gốc nhưng chưa được chuyển thành các hàng curriculum_courses.
+
+## Đồng bộ và bỏ dữ liệu cũ
+
+Chạy trong thư mục backend:
+
+```bash
+node scripts/agu/manifest.cjs
+node scripts/sync-agu-programs.cjs --replace-old
+node scripts/sync-agu-programs.cjs --replace-old --apply
+```
+
+Mặc định chỉ xem trước. `--apply` sao lưu các bảng CTĐT/hồ sơ liên quan vào `artifacts/backups` (bị gitignore, quyền file 0600), sau đó nhập toàn bộ trong một transaction. Nội dung nguồn thay đổi hash thì dừng để xét bản nhập mới; không ghi đè âm thầm. Chạy lại cùng nguồn không tạo thêm phiên bản. Việc đọc nguồn qua dịch vụ chuyển trang công khai sang văn bản không yêu cầu tài khoản/mật khẩu AGU.
+
+Theo yêu cầu đã xác nhận, MIT, TEST_MIT_01, ENG999, sp và sp1 được đánh dấu xóa khỏi danh mục bằng deleted_at. Các khóa CTĐT, phân công, lớp và kết quả liên quan được giữ để không làm hỏng lịch sử học viên. Không gán học viên/lớp/điểm cũ sang CTĐT AGU. Script so sánh nguyên trạng student_course_results, grade_details, grade_revisions, student_program_assignments, student_classes, student_class_memberships trước khi commit. Không tắt trigger hoặc khóa ngoại.
+
+Đã áp dụng migration và nhập trên DB local. Đối chiếu thực tế: dashboard ALL=38, MASTER=38, DOCTOR=0; 6 danh mục chưa có phiên bản; cổng thông tin công khai có 38 bản. 5 CTĐT cũ không còn trong danh mục. CTĐT Công nghệ thông tin 2025–2027 có 60 tín chỉ theo nguồn.
+
+## Kiểm tra
+
+- `node --test test/agu-source.test.cjs`: tính đầy đủ, định danh nguồn, số tín chỉ và dữ liệu chưa xác định.
+- `npm test -- --runInBand`: gồm lọc SQL, phân trang, phạm vi đọc/ghi, DTO.
+- Typecheck backend/frontend và production build frontend.
+- Kiểm tra CSDL chỉ đọc qua repository thật cho danh sách, chi tiết, bộ lọc và cổng thông tin; không ghi điểm thử.
+
+## Xuất báo cáo Excel
+
+Trang Tra cứu & Báo cáo dùng cùng danh mục AGU hiện tại, loại các CTĐT có deleted_at và vẫn kiểm tra phạm vi cho dữ liệu nội bộ. Mỗi CTĐT một dòng, lấy bản nguồn có ID công bố mới nhất; báo cáo hiện có 18 dòng, khác danh sách 38 phiên bản. Tín chỉ chưa xác định để trống trong Excel, không đổi thành 0; thêm cột URL nguồn. File không có kết quả vẫn xuất tiêu đề.
+
+Migration AdminReportExport1794200000000 bổ sung PROGRAM_EXPORT cho ADMIN, giữ nguyên vai trò khác. Đã áp dụng trên DB local. Giao diện báo rõ khi tài khoản thiếu quyền, đồng thời bỏ điều kiện khóa xuất chỉ vì kết quả rỗng. Kiểm tra 21 tests báo cáo, typecheck backend, production build frontend và tạo file thật trong bộ nhớ từ repository SQL (18 dòng).
