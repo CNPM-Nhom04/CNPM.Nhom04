@@ -72,3 +72,4 @@ coverage/
 
 # Local QA inventory and test evidence
 /artifacts/testing/
+/03_SourceCode/frontend/public/mau-kiem-thu-ctdt/

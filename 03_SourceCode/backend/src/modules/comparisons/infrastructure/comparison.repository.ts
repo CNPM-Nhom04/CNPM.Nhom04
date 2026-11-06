@@ -2,8 +2,8 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 import { ComparisonRepository, ComparisonSnapshot } from "../domain/comparison";
 import { ComparisonOptionsDto } from "../application/comparison.dto";
-const ACCESS = `EXISTS(SELECT 1 FROM vw_user_program_access access
- WHERE access.user_id=? AND access.program_id=p.id)`;
+const ACCESS = `p.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM vw_user_program_access access
+ WHERE access.user_id=? AND access.program_id=p.id) OR EXISTS(SELECT 1 FROM program_version_sources src WHERE src.program_version_id=v.id))`;
 @Injectable()
 export class MysqlComparisonRepository extends ComparisonRepository {
   constructor(private readonly db: DataSource) {
@@ -28,7 +28,7 @@ export class MysqlComparisonRepository extends ComparisonRepository {
         [...params, query.limit, (query.page - 1) * query.limit],
       );
       for (const row of data) {
-        row.cohortYear = Number(row.cohortYear);
+        row.cohortYear = row.cohortYear == null ? null : Number(row.cohortYear);
         row.tracks = await manager.query(
           `SELECT CAST(id AS CHAR) id,track_code_snapshot code,
           track_name_snapshot name,status FROM program_version_tracks WHERE program_version_id=? ORDER BY id`,
@@ -84,7 +84,7 @@ export class MysqlComparisonRepository extends ComparisonRepository {
       throw new NotFoundException(
         "Không tìm thấy phiên bản/hướng trong phạm vi được cấp quyền.",
       );
-    row.cohortYear = Number(row.cohortYear);
+    row.cohortYear = row.cohortYear == null ? null : Number(row.cohortYear);
     row.requiredCredits = Number(row.requiredCredits);
     row.versionRequiredCredits =
       row.versionRequiredCredits == null

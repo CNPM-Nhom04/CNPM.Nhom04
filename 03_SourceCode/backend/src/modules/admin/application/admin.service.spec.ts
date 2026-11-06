@@ -14,14 +14,12 @@ describe("AdminService", () => {
     repository = {
       createUser: jest.fn().mockResolvedValue({ id: "10" }),
       saveSettings: jest.fn(),
-      getSettingsOptions: jest
-        .fn()
-        .mockResolvedValue({
-          languageRequirements: [
-            SETTING_DEFAULTS.ngoaiNguBatBuocThacSi,
-            SETTING_DEFAULTS.ngoaiNguBatBuocTienSi,
-          ],
-        }),
+      getSettingsOptions: jest.fn().mockResolvedValue({
+        languageRequirements: [
+          SETTING_DEFAULTS.ngoaiNguBatBuocThacSi,
+          SETTING_DEFAULTS.ngoaiNguBatBuocTienSi,
+        ],
+      }),
       listAudit: jest.fn(),
     };
     service = new AdminService(
@@ -31,8 +29,8 @@ describe("AdminService", () => {
       } as unknown as AuthSecurityRepository,
     );
   });
-  it("accepts configured language choices and a registration duration in days", async () => {
-    const settings = { ...SETTING_DEFAULTS, thoiHanDangKyToiDa: "15" };
+  it("accepts configured language choices and academic thresholds", async () => {
+    const settings = { ...SETTING_DEFAULTS };
     await service.saveSettings(settings, actor);
     expect(repository.saveSettings).toHaveBeenCalledWith(settings, actor);
   });
@@ -45,13 +43,10 @@ describe("AdminService", () => {
     ).rejects.toThrow("chọn giá trị trong danh sách");
     expect(repository.saveSettings).not.toHaveBeenCalled();
   });
-  it("names the day unit when the registration duration is out of range", () => {
+  it("rejects zero passing score", () => {
     expect(() =>
-      service.saveSettings(
-        { ...SETTING_DEFAULTS, thoiHanDangKyToiDa: "366" },
-        actor,
-      ),
-    ).toThrow("365 ngày");
+      service.saveSettings({ ...SETTING_DEFAULTS, diemDatHocPhan: "0" }, actor),
+    ).toThrow("Điểm đạt");
     expect(repository.saveSettings).not.toHaveBeenCalled();
   });
   it("hashes the password and keeps credentials out of the public profile", async () => {
@@ -94,9 +89,12 @@ describe("AdminService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.createUser).not.toHaveBeenCalled();
   });
-  it("rejects a zero semester credit limit before persisting", () => {
+  it("rejects a passing score above the grade scale", () => {
     expect(() =>
-      service.saveSettings({ ...SETTING_DEFAULTS, maxTinChiHocKy: "0" }, actor),
+      service.saveSettings(
+        { ...SETTING_DEFAULTS, diemDatHocPhan: "11" },
+        actor,
+      ),
     ).toThrow(BadRequestException);
     expect(repository.saveSettings).not.toHaveBeenCalled();
   });

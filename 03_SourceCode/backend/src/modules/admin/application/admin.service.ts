@@ -115,23 +115,14 @@ export class AdminService {
     return this.repository.getSettingsOptions();
   }
   saveSettings(settings: SettingsDto, actor: Actor) {
-    for (const key of [
-      "maxTinChiHocKy",
-      "minTinChiTotNghiepThacSi",
-      "minTinChiTotNghiepTienSi",
-      "thoiHanDangKyToiDa",
-    ]) {
-      const upper =
-        key === "thoiHanDangKyToiDa"
-          ? 365
-          : key === "maxTinChiHocKy"
-            ? 100
-            : 999;
-      if (Number(settings[key]) < 1 || Number(settings[key]) > upper)
-        throw new BadRequestException(
-          `${key === "thoiHanDangKyToiDa" ? "Thời hạn mở đăng ký học phần tối đa (ngày)" : key} phải từ 1 đến ${upper}${key === "thoiHanDangKyToiDa" ? " ngày" : ""}.`,
-        );
-    }
+    if (
+      !Number.isFinite(Number(settings.diemDatHocPhan)) ||
+      Number(settings.diemDatHocPhan) <= 0 ||
+      Number(settings.diemDatHocPhan) > 10
+    )
+      throw new BadRequestException(
+        "Điểm đạt học phần phải lớn hơn 0 và không quá 10.",
+      );
     return this.repository.getSettingsOptions().then((options) => {
       for (const [key, label] of [
         ["ngoaiNguBatBuocThacSi", "Chuẩn ngoại ngữ Thạc sĩ"],

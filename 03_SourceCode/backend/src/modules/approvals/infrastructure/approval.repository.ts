@@ -10,7 +10,7 @@ const FROM = ` FROM approval_requests r JOIN program_versions v ON v.id=r.progra
  JOIN training_programs p ON p.id=v.program_id JOIN organizational_units u ON u.id=p.managing_unit_id
  JOIN education_levels e ON e.id=p.education_level_id JOIN users requester ON requester.id=r.requested_by
  LEFT JOIN users reviewer ON reviewer.id=r.reviewing_by LEFT JOIN program_ui_details d ON d.program_version_id=v.id`;
-const ACCESS = `EXISTS(SELECT 1 FROM vw_user_program_access access WHERE access.user_id=? AND access.program_id=p.id)`;
+const ACCESS = `p.deleted_at IS NULL AND EXISTS(SELECT 1 FROM vw_user_program_access access WHERE access.user_id=? AND access.program_id=p.id)`;
 const SELECT =
   `SELECT CAST(r.id AS CHAR) id,CAST(v.id AS CHAR) versionId,r.request_no requestNo,r.current_status status,
  r.revision,COALESCE(d.revision,0) programRevision,p.program_code programCode,v.program_name_snapshot programName,

@@ -1,3 +1,7 @@
+import {
+  OfferingExcelRepository,
+  OfferingInput,
+} from "../grades/infrastructure/offering-excel.repository";
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { plainToInstance } from "class-transformer";
@@ -52,6 +56,7 @@ export const RESOURCES = [
   "supervisors",
   "defenses",
   "documents",
+  "course-offerings",
 ] as const;
 const status = [
   { value: "ACTIVE", label: "Hoạt động" },
@@ -286,6 +291,79 @@ export async function adapterFor(
           : admin.createUser(v, adminActor("USER_MANAGE")),
     };
   }
+  if (resource === "course-offerings") {
+    requirePermissions(account, [
+      "GRADE_READ",
+      "GRADE_MANAGE",
+      "REGISTRATION_MANAGE",
+    ]);
+    if (!account.roles.includes("TRAINING_OFFICER"))
+      throw new ForbiddenException(
+        "Chỉ cán bộ đào tạo được quản lý lớp học phần.",
+      );
+    const repo = new OfferingExcelRepository(db);
+    const gradeActor = { ...actor, canManage: true, canPrepare: true };
+    const options = await repo.options(gradeActor);
+    const columns = [
+      c("code", "Mã lớp học phần", { immutable: true }),
+      c("courseVersionId", "Học phần / phiên bản", {
+        immutable: true,
+        choices: choices(
+          options.courses,
+          "id",
+          (v) => `${v.code} — ${v.name} · v${v.version}`,
+        ),
+      }),
+      c("termId", "Học kỳ", {
+        immutable: true,
+        choices: choices(
+          options.terms,
+          "id",
+          (v) => `${v.year} — ${v.semester}`,
+        ),
+      }),
+      c("capacity", "Sĩ số tối đa", { kind: "number" }),
+      c("status", "Trạng thái lớp", {
+        default: "OPEN",
+        choices: [
+          { value: "OPEN", label: "Đang giảng dạy" },
+          { value: "COMPLETED", label: "Đã hoàn tất" },
+          { value: "CANCELLED", label: "Đã hủy" },
+          { value: "CLOSED", label: "Ngừng tiếp nhận" },
+          { value: "CONFIRMED", label: "Đã xác nhận" },
+          { value: "PLANNED", label: "Dự kiến" },
+        ],
+      }),
+      c("enrolled", "Học viên đang có", {
+        kind: "number",
+        readonly: true,
+        default: 0,
+      }),
+      c("reason", "Lý do thay đổi"),
+      c("reference", "Số hồ sơ"),
+    ];
+    return {
+      title: "Lớp học phần theo học kỳ",
+      columns,
+      notes: [
+        "Chọn học phần và học kỳ từ danh sách. Lớp mới chọn Đang giảng dạy. Sau khi giảng dạy kết thúc, sửa trạng thái thành Đã hoàn tất để đủ điều kiện chốt điểm.",
+        "Mỗi thay đổi cần lý do và số hồ sơ. Không thay môn/học kỳ của lớp cũ; không hủy lớp còn học viên.",
+      ],
+      lock: () => repo.lock(gradeActor),
+      load: async () =>
+        (await repo.list(gradeActor)).map((r) =>
+          record(r, columns, r.code, {
+            ...r,
+            capacity: Number(r.capacity),
+            enrolled: Number(r.enrolled),
+            reason: "",
+            reference: "",
+          }),
+        ),
+      validate: async (v) => repo.validate(v as unknown as OfferingInput),
+      save: (v, row) => repo.save(v, row?.id || null, gradeActor),
+    };
+  }
   if (resource === "student-classes") {
     requirePermissions(
       account,
@@ -436,7 +514,15 @@ export async function adapterFor(
       c("thoiGianDaoTao", "Thời gian đào tạo"),
       c("khoaTuyenSinh", "Khóa tuyển sinh"),
       c("tongTinChiYeuCau", "Tín chỉ yêu cầu", { kind: "number" }),
-      c("chuanDauRaTiengAnh", "Chuẩn ngoại ngữ"),
+      c("chuanDauRaTiengAnh", "Chuẩn ngoại ngữ", {
+        choices: [
+          { value: "", label: "Chưa khai báo" },
+          ...(options.languageRequirements || []).map((value) => ({
+            value,
+            label: value,
+          })),
+        ],
+      }),
       c("chuanDauRaTinHoc", "Chuẩn CNTT", {
         choices: [
           { value: "", label: "Chưa khai báo" },

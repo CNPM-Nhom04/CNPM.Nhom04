@@ -68,15 +68,13 @@ describe("Record Excel merge and transaction boundary", () => {
       new ConfigService({ JWT_SECRET: "test-key" }),
       {} as any,
     );
-    jest
-      .spyOn(service, "account")
-      .mockResolvedValue({
-        id: "1",
-        username: "admin",
-        ip: "",
-        roles: ["ADMIN"],
-        permissions: [],
-      });
+    jest.spyOn(service, "account").mockResolvedValue({
+      id: "1",
+      username: "admin",
+      ip: "",
+      roles: ["ADMIN"],
+      permissions: [],
+    });
   });
   async function upload(edit: (book: Workbook) => void = () => {}) {
     const { buffer } = await service.template("faculties", "1", "");
@@ -99,6 +97,21 @@ describe("Record Excel merge and transaction boundary", () => {
       await service.import("faculties", "1", "", file, false),
     ).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
     expect(saved).not.toHaveBeenCalled();
+  });
+  it("exports dropdowns through named ranges compatible with Excel", async () => {
+    adapter.columns.push({
+      key: "unit",
+      label: "Đơn vị",
+      choices: [{ value: "1", label: "Khoa CNTT" }],
+    });
+    rows[0].values.unit = "1";
+    const file = await upload();
+    const book = new Workbook();
+    await book.xlsx.load(file.buffer as never);
+    expect(
+      book.getWorksheet("Du lieu")!.getCell("F2").dataValidation.formulae,
+    ).toEqual(["LuaChon_5"]);
+    expect(book.definedNames.getRanges("LuaChon_5").ranges).toHaveLength(1);
   });
   it("previews without writes and merges only changed cells preserving concurrent edits", async () => {
     const file = await upload((book) => {

@@ -1,4 +1,5 @@
 "use client";
+import { ExcelRecordsPanel } from "@/components/excel/ExcelRecordsPanel";
 import { useEffect, useState } from "react";
 import { Button, Input } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
@@ -670,6 +671,23 @@ export default function GradesPage() {
           </select>
         </label>
       </section>
+      {canManage && (
+        <details className="rounded-xl border bg-white p-4 print:hidden">
+          <summary className="cursor-pointer font-semibold">
+            Cấu hình lớp học phần và xác nhận hoàn tất
+          </summary>
+          <p className="my-3 text-sm text-slate-600">
+            Thêm lớp học phần theo học kỳ bằng Excel. Khi lớp kết thúc giảng
+            dạy, chọn trạng thái Đã hoàn tất trước khi chốt điểm.
+          </p>
+          <ExcelRecordsPanel
+            resource="course-offerings"
+            onImported={() => {
+              refreshRows();
+            }}
+          />
+        </details>
+      )}
       {canManage && classId && termId && !loading && (
         <GradePreparation
           key={`${classId}:${termId}:${version}`}

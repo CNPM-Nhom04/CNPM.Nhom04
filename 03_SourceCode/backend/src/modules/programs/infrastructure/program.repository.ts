@@ -28,6 +28,7 @@ const SCOPE = `p.deleted_at IS NULL AND EXISTS (SELECT 1 FROM user_scopes us WHE
  OR (us.scope_type='ORG_UNIT' AND EXISTS (SELECT 1 FROM organizational_unit_closure oc
    WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=p.managing_unit_id))))`;
 const READ_SCOPE = `p.deleted_at IS NULL AND (${SCOPE} OR cs.program_id IS NOT NULL)`;
+const READ_VERSION_SCOPE = `p.deleted_at IS NULL AND (${SCOPE} OR src.program_version_id IS NOT NULL)`;
 const LEVEL_FILTER =
   "(?='ALL' OR e.level_code=? OR (?='DOCTOR' AND e.level_code='PHD'))";
 const FROM = ` FROM program_versions v JOIN training_programs p ON p.id=v.program_id
@@ -118,7 +119,7 @@ export class MysqlProgramRepository extends ProgramRepository {
   async list(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "",
       status = query.selectedStatus || "ALL";
-    const where = ` WHERE ${READ_SCOPE} AND ${LEVEL_FILTER} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
+    const where = ` WHERE ${READ_VERSION_SCOPE} AND ${LEVEL_FILTER} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
     const level = query.selectedLevel || "ALL";
     const params = [
       actor.id,
@@ -149,9 +150,22 @@ export class MysqlProgramRepository extends ProgramRepository {
         " AND NOT EXISTS (SELECT 1 FROM program_versions v WHERE v.program_id=p.id)",
       [actor.id, level, level, level],
     );
+    const writableIds = actor.permissions.includes("PROGRAM_EDIT")
+      ? new Set(
+          (
+            await this.db.query(
+              `SELECT CAST(p.id AS CHAR) id FROM training_programs p WHERE ${SCOPE}`,
+              [actor.id],
+            )
+          ).map((p) => String(p.id)),
+        )
+      : new Set<string>();
     return {
       unversionedCount: Number(unversioned.total),
-      data: rows.map((row) => this.map(row)),
+      data: rows.map((row) => ({
+        ...this.map(row),
+        canCreateVersion: writableIds.has(String(row.programId)),
+      })),
       meta: {
         page: query.page,
         limit: query.limit,
@@ -388,7 +402,7 @@ export class MysqlProgramRepository extends ProgramRepository {
   ): Promise<ProgramItem> {
     const [row] = await manager.query(
       SELECT +
-        ` WHERE v.id=? AND ${lock ? SCOPE : READ_SCOPE}` +
+        ` WHERE v.id=? AND ${lock ? SCOPE : READ_VERSION_SCOPE}` +
         (lock ? " FOR UPDATE" : ""),
       [id, actor.id],
     );

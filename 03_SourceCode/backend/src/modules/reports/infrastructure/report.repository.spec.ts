@@ -3,18 +3,16 @@ import { MysqlReportRepository } from "./report.repository";
 import { AdminReportExport1794200000000 } from "../../../core/database/migrations/1794200000000-AdminReportExport";
 describe("Reports after AGU catalog import", () => {
   it("uses active source catalog with real credit metadata and preserves local scope checks", async () => {
-    const query = jest
-      .fn()
-      .mockResolvedValue([
-        {
-          id: 1,
-          programVersionId: 3,
-          status: "DRAFT",
-          isSourceVersion: 1,
-          tongTinChi: null,
-          soHocVien: 0,
-        },
-      ]);
+    const query = jest.fn().mockResolvedValue([
+      {
+        id: 1,
+        programVersionId: 3,
+        status: "DRAFT",
+        isSourceVersion: 1,
+        tongTinChi: null,
+        soHocVien: 0,
+      },
+    ]);
     const repo = new MysqlReportRepository({ query } as unknown as DataSource);
     const rows = await repo.findAll(
       { actorId: "1", selectedDegree: "MASTER" },
@@ -30,6 +28,8 @@ describe("Reports after AGU catalog import", () => {
     expect(sql).toContain("program_version_sources");
     expect(sql).toContain("src.total_credits");
     expect(sql).toContain("user_scopes");
+    expect(sql).toContain("vw_user_student_access");
+    expect(params.slice(0, 2)).toEqual(["1", "1"]);
     expect(params.slice(-2)).toEqual([20, 0]);
   });
   it("only adds the missing export grant to ADMIN", async () => {

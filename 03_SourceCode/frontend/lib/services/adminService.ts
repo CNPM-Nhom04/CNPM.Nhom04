@@ -44,11 +44,7 @@ export interface AdminSettingsOptions {
   languageRequirements: string[];
 }
 export interface AdminSettings {
-  maxTinChiHocKy: string;
-  minTinChiTotNghiepThacSi: string;
-  minTinChiTotNghiepTienSi: string;
   diemDatHocPhan: string;
-  thoiHanDangKyToiDa: string;
   ngoaiNguBatBuocThacSi: string;
   ngoaiNguBatBuocTienSi: string;
 }

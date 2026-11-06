@@ -1,3 +1,5 @@
+import { TrainingAccountDisplayNames1794400000000 } from "./migrations/1794400000000-TrainingAccountDisplayNames";
+import { TrainingSettingsScope1794300000000 } from "./migrations/1794300000000-TrainingSettingsScope";
 import { AdminReportExport1794200000000 } from "./migrations/1794200000000-AdminReportExport";
 import { AguProgramCatalog1794100000000 } from "./migrations/1794100000000-AguProgramCatalog";
 import { LecturerGradeRead1794000000000 } from "./migrations/1794000000000-LecturerGradeRead";
@@ -45,6 +47,8 @@ export default new DataSource({
     LecturerGradeRead1794000000000,
     AguProgramCatalog1794100000000,
     AdminReportExport1794200000000,
+    TrainingSettingsScope1794300000000,
+    TrainingAccountDisplayNames1794400000000,
   ],
   migrationsTransactionMode: "none",
 });

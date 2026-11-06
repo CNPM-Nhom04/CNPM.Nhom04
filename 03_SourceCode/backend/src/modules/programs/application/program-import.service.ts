@@ -27,6 +27,7 @@ export class ProgramImportService {
     const program = await this.repository.detail(id, actor);
     const track = program.tracks.find((item) => item.id === trackId);
     if (
+      program.sourceReadOnly ||
       !["DRAFT", "RETURNED"].includes(program.status) ||
       !track ||
       track.status === "INACTIVE"
@@ -76,6 +77,86 @@ export class ProgramImportService {
             group.minimumCredits)
           : null,
       ]);
+    const lookup = exportSheet(
+      book,
+      "Danh sach chon",
+      [
+        "Mã học phần",
+        "Tên học phần",
+        "Tín chỉ",
+        "Phiên bản",
+        "Mã nhóm",
+        "Tên nhóm",
+      ],
+      [25, 60, 15, 20, 20, 45],
+    );
+    const catalog: {
+      code: string;
+      name: string;
+      credits: number;
+      id: string;
+    }[] = [];
+    for (let page = 1; ; page++) {
+      const result = (await this.repository.catalog(
+        { page, limit: 100 },
+        actor,
+      )) as { data: typeof catalog; meta?: { totalPages: number } };
+      catalog.push(...result.data);
+      if (catalog.length > 5000)
+        throw new BadRequestException(
+          "Ngân hàng vượt 5000 phiên bản; cần thu hẹp phạm vi trước khi xuất mẫu.",
+        );
+      if (!result.meta || page >= result.meta.totalPages) break;
+    }
+    for (
+      let index = 0;
+      index < Math.max(catalog.length, track.groups.length);
+      index++
+    ) {
+      const course = catalog[index],
+        group = track.groups[index];
+      lookup.addRow([
+        course?.code || "",
+        course?.name || "",
+        course?.credits ?? "",
+        course?.id || "",
+        group?.code || "",
+        group?.name || "",
+      ]);
+    }
+    if (catalog.length)
+      book.definedNames.add(
+        `'Danh sach chon'!$A$2:$A$${catalog.length + 1}`,
+        "MaHocPhan",
+      );
+    if (track.groups.length)
+      book.definedNames.add(
+        `'Danh sach chon'!$E$2:$E$${track.groups.length + 1}`,
+        "NhomKienThuc",
+      );
+    const validationLastRow = Math.min(
+      1001,
+      Math.max(21, courses.rowCount + 20),
+    );
+    for (let row = 2; row <= validationLastRow; row++) {
+      if (catalog.length)
+        courses.getCell(row, 1).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["MaHocPhan"],
+        };
+      if (track.groups.length)
+        courses.getCell(row, 2).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ["NhomKienThuc"],
+        };
+      courses.getCell(row, 4).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"Bắt buộc,Tự chọn"'],
+      };
+    }
     const guide = exportSheet(
       book,
       "Huong dan",
@@ -85,7 +166,7 @@ export class ProgramImportService {
     guide.addRows([
       [
         "Mã học phần",
-        "Nhập đúng mã trong ngân hàng học phần. Mỗi môn chỉ xuất hiện một lần.",
+        "Chọn mã từ danh sách trong ô hoặc tra sheet Danh sach chon. Danh sách theo phạm vi ngân hàng; cán bộ đối chiếu môn với ngành và hồ sơ CTĐT. Mỗi môn chỉ xuất hiện một lần.",
       ],
       ["Mã nhóm", track.groups.map((g) => `${g.code}: ${g.name}`).join("; ")],
       [

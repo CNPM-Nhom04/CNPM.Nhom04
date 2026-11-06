@@ -226,11 +226,16 @@ export class ExcelRecordsService {
         col.choices?.map((c) => c.label) ||
         (col.kind === "bool" ? ["Có", "Không"] : []);
       if (values.length) {
+        const name = `LuaChon_${index + 1}`;
+        book.definedNames.add(
+          `'Danh sach chon'!$C$${begin}:$C$${lookups.rowCount}`,
+          name,
+        );
         for (let row = 2; row <= lastRow; row++)
           sheet.getCell(row, index + 2).dataValidation = {
             type: "list",
             allowBlank: true,
-            formulae: [`'Danh sach chon'!$C$${begin}:$C$${lookups.rowCount}`],
+            formulae: [name],
           };
       }
     }

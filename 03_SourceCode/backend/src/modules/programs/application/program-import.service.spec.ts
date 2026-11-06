@@ -57,6 +57,10 @@ describe("CTDT Excel preview", () => {
     const buffer = await service.template("1", "2", actor);
     const book = new Workbook();
     await book.xlsx.load(buffer as never);
+    expect(book.getWorksheet("Nhap hoc phan")!.rowCount).toBeLessThan(100);
+    expect(
+      book.getWorksheet("Nhap hoc phan")!.getCell("A2").dataValidation.formulae,
+    ).toEqual(["MaHocPhan"]);
     book
       .getWorksheet("Nhap hoc phan")!
       .addRow(["cs101", "a", "", "Tự chọn", 2]);

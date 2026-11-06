@@ -6,7 +6,6 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
-  IsNumberString,
   IsOptional,
   IsString,
   Matches,
@@ -147,26 +146,10 @@ export class CategoryInputDto {
   trangThai = true;
 }
 export class SettingsDto {
-  @ApiProperty({ example: "18" })
-  @IsNumberString({ no_symbols: true })
-  @MaxLength(3)
-  maxTinChiHocKy: string;
-  @ApiProperty({ example: "60" })
-  @IsNumberString({ no_symbols: true })
-  @MaxLength(3)
-  minTinChiTotNghiepThacSi: string;
-  @ApiProperty({ example: "90" })
-  @IsNumberString({ no_symbols: true })
-  @MaxLength(3)
-  minTinChiTotNghiepTienSi: string;
   @ApiProperty({ example: "5.5" })
   @IsString()
   @Matches(/^(?:[0-9](?:\.\d{1,2})?|10(?:\.0{1,2})?)$/)
   diemDatHocPhan: string;
-  @ApiProperty({ example: "14" })
-  @IsNumberString({ no_symbols: true })
-  @MaxLength(3)
-  thoiHanDangKyToiDa: string;
   @ApiProperty()
   @IsString()
   @Transform(trim)
@@ -180,4 +163,3 @@ export class SettingsDto {
   @MaxLength(255)
   ngoaiNguBatBuocTienSi: string;
 }
- 

@@ -76,7 +76,7 @@ const menuGroups = [
         icon: FileSpreadsheet,
       },
       {
-        name: "Xét tốt nghiệp & Cấp bằng",
+        name: "Xét điều kiện tốt nghiệp",
         href: "/dashboard/xet-tot-nghiep",
         icon: Award,
       },
