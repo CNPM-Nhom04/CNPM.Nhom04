@@ -1,9 +1,7 @@
 "use client";
-import { ExcelRecordsPanel } from "@/components/excel/ExcelRecordsPanel";
 import { useEffect, useState } from "react";
 import { Button, Input } from "@/components/ui";
 import { Modal } from "@/components/ui/Modal";
-import { GradePreparation } from "@/components/excel/GradePreparation";
 import { ExcelOnlyForm } from "@/components/excel/ExcelOnlyForm";
 import {
   gradeService,
@@ -22,7 +20,15 @@ type Option = {
   academicYear: string;
   semester: string;
 };
+type Course = {
+  courseVersionId: string;
+  courseCode: string;
+  courseName: string;
+  versionNo: number;
+};
 type Row = {
+  courseVersionId: string;
+  classStatus: string;
   registrationId: string;
   studentCode: string;
   studentName: string;
@@ -430,6 +436,85 @@ function LegacyEditor({
     </>
   );
 }
+function CompleteCourse({
+  classId,
+  termId,
+  courseVersionId,
+  label,
+  onSaved,
+}: {
+  classId: string;
+  termId: string;
+  courseVersionId: string;
+  label: string;
+  onSaved: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [reference, setReference] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <details className="rounded-xl border bg-white p-4 print:hidden">
+      <summary className="cursor-pointer font-semibold">
+        Xác nhận môn đã giảng dạy xong
+      </summary>
+      <p className="my-2 text-sm text-slate-600">
+        Thực hiện khi kết thúc giảng dạy, trước khi chốt điểm. Hồ sơ này không
+        tự chốt điểm của học viên.
+      </p>
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
+      <ExcelOnlyForm
+        recordLabel={label}
+        recordKey={`${classId}:${termId}:${courseVersionId}`}
+        heading="Hồ sơ xác nhận hoàn tất giảng dạy"
+        templateLabel="Tải mẫu xác nhận hoàn tất môn"
+        submitLabel="Xác nhận hoàn tất môn"
+        showDependentStep={false}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setError("");
+          try {
+            await request("/excel/hoan-tat-mon", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                classId,
+                termId,
+                courseVersionId,
+                note,
+                reference,
+              }),
+            });
+            onSaved();
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Không xác nhận được.");
+          }
+        }}
+      >
+        <Input
+          name="note"
+          label="Lý do xác nhận"
+          required
+          minLength={10}
+          maxLength={1000}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        <Input
+          name="reference"
+          label="Số hồ sơ"
+          required
+          maxLength={255}
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+        />
+      </ExcelOnlyForm>
+    </details>
+  );
+}
 export default function GradesPage() {
   const [legacy, setLegacy] = useState<GradeList | null>(null),
     [legacyPage, setLegacyPage] = useState(1),
@@ -439,7 +524,9 @@ export default function GradesPage() {
     [canManage, setCanManage] = useState(false);
   const [unitId, setUnitId] = useState(""),
     [classId, setClassId] = useState(""),
-    [termId, setTermId] = useState("");
+    [termId, setTermId] = useState(""),
+    [courseVersionId, setCourseVersionId] = useState("");
+  const [courses, setCourses] = useState<Course[]>([]);
   const [rows, setRows] = useState<Row[]>([]),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
@@ -468,13 +555,20 @@ export default function GradesPage() {
     return () => c.abort();
   }, []);
   useEffect(() => {
-    if (!classId || !termId) return;
+    if (!classId || !termId || !courseVersionId) return;
     const c = new AbortController();
-    request<Row[]>("/excel/rows?" + new URLSearchParams({ classId, termId }), {
-      signal: c.signal,
-    })
+    request<Row[]>(
+      "/excel/rows?" +
+        new URLSearchParams({ classId, termId, courseVersionId }),
+      {
+        signal: c.signal,
+      },
+    )
       .then((data) => {
-        if (!c.signal.aborted) setRows(data);
+        if (!c.signal.aborted)
+          setRows(
+            data.filter((row) => row.courseVersionId === courseVersionId),
+          );
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);
@@ -483,7 +577,7 @@ export default function GradesPage() {
         if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
-  }, [classId, termId, version]);
+  }, [classId, termId, courseVersionId, version]);
   useEffect(() => {
     const controller = new AbortController();
     gradeService
@@ -494,6 +588,21 @@ export default function GradesPage() {
       });
     return () => controller.abort();
   }, [legacyPage, version]);
+  useEffect(() => {
+    if (!classId || !termId) return;
+    const controller = new AbortController();
+    request<Course[]>(
+      "/excel/mon-hoc?" + new URLSearchParams({ classId, termId }),
+      { signal: controller.signal },
+    )
+      .then((data) => {
+        if (!controller.signal.aborted) setCourses(data);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [classId, termId, version]);
   const units = [...new Map(options.map((o) => [o.unitId, o])).values()];
   const classes = [
     ...new Map(
@@ -511,7 +620,7 @@ export default function GradesPage() {
     (o) => o.classId === classId && o.termId === termId,
   );
   function refreshRows() {
-    setLoading(Boolean(classId && termId));
+    setLoading(Boolean(classId && termId && courseVersionId));
     setRows([]);
     setError("");
     setVersion((v) => v + 1);
@@ -535,7 +644,7 @@ export default function GradesPage() {
         "/excel/" +
           (apply ? "luu" : "kiem-tra") +
           "?" +
-          new URLSearchParams({ classId, termId }),
+          new URLSearchParams({ classId, termId, courseVersionId }),
         { method: "POST", body },
       );
       if (apply) {
@@ -600,15 +709,15 @@ export default function GradesPage() {
           className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
         >
           Chưa có lớp hoặc học kỳ trong phạm vi tài khoản. Cần cấu hình lớp và
-          học kỳ trước; bảng điểm chỉ có dữ liệu khi học viên đã được xếp lớp và
-          đăng ký học phần.
+          học kỳ trước; bảng điểm tự lấy học viên đã được xếp lớp và phân công
+          CTĐT.
         </p>
       )}
-      <section className="grid md:grid-cols-3 gap-3 rounded-xl border bg-white p-4 print:hidden">
+      <section className="grid md:grid-cols-4 gap-3 rounded-xl border bg-white p-4 print:hidden">
         <label className="text-sm space-y-1">
-          1. Khoa
+          1. Đơn vị / Khoa
           <select
-            aria-label="Chọn khoa"
+            aria-label="Chọn đơn vị / khoa"
             className="block w-full border rounded-lg p-2"
             value={unitId}
             disabled={busy}
@@ -616,10 +725,12 @@ export default function GradesPage() {
               setUnitId(e.target.value);
               setClassId("");
               setTermId("");
+              setCourseVersionId("");
+              setCourses([]);
               reset();
             }}
           >
-            <option value="">Chọn khoa</option>
+            <option value="">Chọn đơn vị / khoa</option>
             {units.map((o) => (
               <option key={o.unitId} value={o.unitId}>
                 {o.unitName}
@@ -637,6 +748,8 @@ export default function GradesPage() {
             onChange={(e) => {
               setClassId(e.target.value);
               setTermId("");
+              setCourseVersionId("");
+              setCourses([]);
               reset();
             }}
           >
@@ -657,8 +770,9 @@ export default function GradesPage() {
             disabled={!classId || busy}
             onChange={(e) => {
               setTermId(e.target.value);
+              setCourseVersionId("");
+              setCourses([]);
               reset();
-              setLoading(Boolean(classId && e.target.value));
             }}
           >
             <option value="">Chọn học kỳ</option>
@@ -670,66 +784,113 @@ export default function GradesPage() {
             ))}
           </select>
         </label>
+        <label className="text-sm space-y-1">
+          4. Môn học
+          <select
+            aria-label="Chọn môn học"
+            className="block w-full border rounded-lg p-2"
+            value={courseVersionId}
+            disabled={!termId || busy}
+            onChange={(e) => {
+              setCourseVersionId(e.target.value);
+              reset();
+              setLoading(Boolean(e.target.value));
+            }}
+          >
+            <option value="">Chọn môn trong CTĐT của lớp</option>
+            {courses.map((course) => (
+              <option
+                key={course.courseVersionId}
+                value={course.courseVersionId}
+              >
+                {course.courseCode} — {course.courseName} · v{course.versionNo}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
-      {canManage && (
-        <details className="rounded-xl border bg-white p-4 print:hidden">
-          <summary className="cursor-pointer font-semibold">
-            Cấu hình lớp học phần và xác nhận hoàn tất
-          </summary>
-          <p className="my-3 text-sm text-slate-600">
-            Thêm lớp học phần theo học kỳ bằng Excel. Khi lớp kết thúc giảng
-            dạy, chọn trạng thái Đã hoàn tất trước khi chốt điểm.
+      {canManage && courseVersionId && !loading && rows.length > 0 && (
+        <div className="rounded-xl border bg-white p-4 print:hidden">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                setPolicy(await gradeService.policy(rows[0].offeringId));
+              } catch (e) {
+                setError(
+                  e instanceof Error
+                    ? e.message
+                    : "Không tải được quy tắc điểm.",
+                );
+              }
+            }}
+          >
+            Quy tắc tính điểm môn đã chọn
+          </Button>
+          <p className="mt-2 text-sm text-slate-500">
+            {rows[0].policyId
+              ? "Đã có quy tắc tính điểm."
+              : "Chưa có quy tắc. Cấu hình theo hồ sơ môn trước khi nhập điểm."}
           </p>
-          <ExcelRecordsPanel
-            resource="course-offerings"
-            onImported={() => {
+        </div>
+      )}
+      {canManage &&
+        courseVersionId &&
+        !loading &&
+        rows.length > 0 &&
+        rows[0].classStatus !== "COMPLETED" && (
+          <CompleteCourse
+            key={`${classId}:${termId}:${courseVersionId}`}
+            classId={classId}
+            termId={termId}
+            courseVersionId={courseVersionId}
+            label={`${selected?.classCode} · ${courses.find((c) => c.courseVersionId === courseVersionId)?.courseCode}`}
+            onSaved={() => {
               refreshRows();
+              setMessage(
+                "Đã xác nhận hoàn tất giảng dạy. Có thể chốt từng kết quả khi đủ điểm.",
+              );
             }}
           />
-        </details>
-      )}
-      {canManage && classId && termId && !loading && (
-        <GradePreparation
-          key={`${classId}:${termId}:${version}`}
-          classId={classId}
-          termId={termId}
-          hasRows={rows.length > 0}
-          onSaved={() => {
-            setError("");
-            setMessage(
-              "Đã lập danh sách học. Cấu hình quy tắc điểm nếu chưa có, rồi tải mẫu điểm để nhập.",
-            );
-            setFile(null);
-            setPreview(null);
-            refreshRows();
-          }}
-          onPolicy={async (id) => {
-            try {
-              setPolicy(await gradeService.policy(id));
-            } catch (e) {
-              setError(
-                e instanceof Error ? e.message : "Không tải được quy tắc.",
-              );
-            }
-          }}
-        />
-      )}
-      {canManage && classId && termId && (
+        )}
+      {canManage && classId && termId && courseVersionId && (
         <section className="rounded-xl border bg-blue-50/40 p-4 space-y-3 print:hidden text-sm">
           <p>
-            Bước 3 · Mẫu chứa điểm hiện có. Sửa các ô cần đổi, điền lý do và số
-            hồ sơ tại dòng thay đổi; không xóa dữ liệu ngoài file.
+            Mẫu tự lấy học viên của lớp và điểm hiện có của môn đã chọn. Sửa các
+            ô cần đổi, điền lý do và số hồ sơ tại dòng thay đổi; không xóa dữ
+            liệu ngoài file.
           </p>
           <div className="flex flex-wrap gap-3 items-center">
             <Button
               variant="outline"
-              disabled={busy || loading || !rows.length}
+              disabled={busy || loading}
               onClick={async () => {
                 setBusy(true);
                 try {
+                  const opened = await request<{ offeringId: string }>(
+                    "/excel/mo-bang-diem",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        classId,
+                        termId,
+                        courseVersionId,
+                      }),
+                    },
+                  );
+                  refreshRows();
+                  const rule = await gradeService.policy(opened.offeringId);
+                  if (!rule.policy) {
+                    setPolicy(rule);
+                    setMessage(
+                      "Môn chưa có quy tắc tính điểm. Lưu quy tắc bằng Excel, sau đó bấm tải mẫu điểm.",
+                    );
+                    return;
+                  }
                   await downloadExcel(
                     "/api/quan-ly-diem/excel/mau?" +
-                      new URLSearchParams({ classId, termId }),
+                      new URLSearchParams({ classId, termId, courseVersionId }),
                     "Bang_diem_" + selected?.classCode + ".xlsx",
                   );
                 } catch (e) {
@@ -741,7 +902,7 @@ export default function GradesPage() {
                 }
               }}
             >
-              Tải Excel có điểm phiên bản trước
+              Tải Excel học viên và điểm hiện có
             </Button>
             <input
               aria-label="Nhập bảng điểm Excel"
@@ -810,12 +971,16 @@ export default function GradesPage() {
           <h2 className="font-bold">
             {selected
               ? `Bảng điểm lớp ${selected.classCode}`
-              : "Chọn khoa, lớp và học kỳ để xem điểm"}
+              : "Chọn đơn vị, lớp, học kỳ và môn để xem điểm"}
           </h2>
           {selected && (
             <p className="text-sm">
               {selected.unitName} · {selected.academicYear} · Học kỳ{" "}
-              {selected.semester}
+              {selected.semester} ·{" "}
+              {
+                courses.find((c) => c.courseVersionId === courseVersionId)
+                  ?.courseName
+              }
             </p>
           )}
         </div>
@@ -1002,6 +1167,11 @@ export default function GradesPage() {
             onSaved={() => {
               setPolicy(null);
               refreshRows();
+              setFile(null);
+              setPreview(null);
+              setMessage(
+                "Đã lưu quy tắc tính điểm. Bấm tải Excel học viên và điểm hiện có để lấy mẫu mới nhất.",
+              );
             }}
           />
         )}

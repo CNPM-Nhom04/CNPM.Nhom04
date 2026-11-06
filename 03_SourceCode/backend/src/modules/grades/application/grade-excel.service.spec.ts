@@ -64,6 +64,26 @@ describe("grade workbook", () => {
       false,
     );
   });
+  it("exports only the selected course and rejects using its workbook for another course", async () => {
+    repository.excelRows.mockResolvedValue([
+      { ...original, courseVersionId: "3" },
+      { ...original, registrationId: "12", courseVersionId: "4" },
+    ]);
+    const bytes = await service.template("1", "2", actor, "3");
+    const book = new Workbook();
+    await book.xlsx.load(bytes as never);
+    expect(book.getWorksheet("Bang diem")!.getCell("A2").text).toBe("11");
+    expect(book.getWorksheet("Bang diem")!.getCell("A3").text).toBe("");
+    const file = {
+      buffer: bytes,
+      size: bytes.length,
+      originalname: "grade.xlsx",
+    };
+    await expect(
+      service.import("1", "2", file, actor, false, "4"),
+    ).rejects.toThrow("File mẫu");
+    expect(repository.importRows).not.toHaveBeenCalled();
+  });
   it.each(["identity", "formula", "score", "signature", "context"])(
     "rejects tampered %s before writes",
     async (kind) => {

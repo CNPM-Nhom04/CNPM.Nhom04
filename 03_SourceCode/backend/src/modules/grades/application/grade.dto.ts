@@ -155,3 +155,14 @@ export class GradePolicyDto {
   @MaxLength(255)
   reference: string;
 }
+
+export class GradeSheetDto {
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) classId: string;
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) termId: string;
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) courseVersionId: string;
+}
+export class CompleteGradeSheetDto extends GradeReasonDto {
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) classId: string;
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) termId: string;
+  @IsString() @Matches(/^[1-9]\d{0,19}$/) courseVersionId: string;
+}

@@ -7,10 +7,10 @@ async function proxy(
   const path = ((await context.params).path ?? []).join("/");
   const allowed =
     request.method === "GET"
-      ? /^(?:|excel\/(?:options|rows|mau|chuan-bi|danh-sach-mau)|lop-hoc|dang-ky|[1-9]\d{0,19}|lop-hoc\/[1-9]\d{0,19}\/quy-tac)$/.test(
+      ? /^(?:|excel\/(?:options|rows|mau|mon-hoc|chuan-bi|danh-sach-mau)|lop-hoc|dang-ky|[1-9]\d{0,19}|lop-hoc\/[1-9]\d{0,19}\/quy-tac)$/.test(
           path,
         )
-      : /^(?:excel\/(?:kiem-tra|luu|danh-sach-kiem-tra|danh-sach-luu)|lop-hoc\/[1-9]\d{0,19}\/quy-tac|[1-9]\d{0,19}\/(?:chot|huy|mo-lai|dieu-chinh))$/.test(
+      : /^(?:excel\/(?:kiem-tra|luu|mo-bang-diem|hoan-tat-mon|danh-sach-kiem-tra|danh-sach-luu)|lop-hoc\/[1-9]\d{0,19}\/quy-tac|[1-9]\d{0,19}\/(?:chot|huy|mo-lai|dieu-chinh))$/.test(
           path,
         );
   if (!allowed)

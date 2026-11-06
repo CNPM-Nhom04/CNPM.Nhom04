@@ -43,7 +43,7 @@ describe("Degree filters and official source visibility", () => {
         query,
       } as unknown as DataSource);
       const result = await repo.list(
-        { page: 1, limit: 20 },
+        { page: 1, limit: 20, selectedCatalog: "PUBLIC" },
         { ...actor, permissions: ["PROGRAM_READ", "PROGRAM_EDIT"] },
       );
       expect(result.data[0].canCreateVersion).toBe(owned);
@@ -69,6 +69,54 @@ describe("Degree filters and official source visibility", () => {
       expect(sql).toContain("e.level_code=");
       expect(params.slice(0, 4)).toEqual(["17", "MASTER", "MASTER", "MASTER"]);
     }
+  });
+  it("defaults to account scope for rows, totals and unversioned roots", async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: 0 }])
+      .mockResolvedValueOnce([{ total: 0 }]);
+    const repo = new MysqlProgramRepository({ query } as unknown as DataSource);
+    await repo.list({ page: 1, limit: 20 }, actor);
+    for (const [sql, params] of query.mock.calls) {
+      expect(sql).toContain("us.user_id=?");
+      expect(sql).not.toContain("OR src.program_version_id IS NOT NULL");
+      expect(sql).not.toContain("OR cs.program_id IS NOT NULL");
+      expect(params[0]).toBe(actor.id);
+    }
+  });
+  it("public mode lists only published-source records, never internal drafts", async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: 0 }])
+      .mockResolvedValueOnce([{ total: 0 }]);
+    const repo = new MysqlProgramRepository({ query } as unknown as DataSource);
+    await repo.list({ page: 1, limit: 20, selectedCatalog: "PUBLIC" }, actor);
+    for (const [sql] of query.mock.calls.slice(0, 2))
+      expect(sql).toContain("AND src.program_version_id IS NOT NULL");
+    expect(query.mock.calls[2][0]).toContain("AND cs.program_id IS NOT NULL");
+    query.mockClear();
+    query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 0 }]);
+    await repo.unversioned(
+      { page: 1, limit: 20, selectedCatalog: "PUBLIC" },
+      actor,
+    );
+    for (const [sql] of query.mock.calls)
+      expect(sql).toContain("AND cs.program_id IS NOT NULL");
+  });
+  it("validates the catalog selector", async () => {
+    for (const selectedCatalog of ["MANAGED", "PUBLIC"])
+      expect(
+        await validate(plainToInstance(ProgramQueryDto, { selectedCatalog })),
+      ).toHaveLength(0);
+    expect(
+      (
+        await validate(
+          plainToInstance(ProgramQueryDto, { selectedCatalog: "ALL" }),
+        )
+      ).length,
+    ).toBeGreaterThan(0);
   });
   it("allows official public-source reads without using that exception for writes", async () => {
     const query = jest.fn().mockResolvedValue([]);

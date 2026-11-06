@@ -44,6 +44,10 @@ export class ProgramQueryDto {
   @IsOptional()
   @IsIn(["ALL", ...Object.keys(STATUS_LABELS)])
   selectedStatus?: string;
+  @ApiPropertyOptional({ enum: ["MANAGED", "PUBLIC"], default: "MANAGED" })
+  @IsOptional()
+  @IsIn(["MANAGED", "PUBLIC"])
+  selectedCatalog?: "MANAGED" | "PUBLIC";
   @ApiPropertyOptional({ enum: ["ALL", "MASTER", "DOCTOR"] })
   @IsOptional()
   @IsIn(["ALL", "MASTER", "DOCTOR"])

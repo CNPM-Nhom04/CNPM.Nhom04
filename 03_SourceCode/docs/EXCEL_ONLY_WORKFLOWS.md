@@ -29,13 +29,15 @@ Chỉ các giá trị khác biệt được đưa vào trạng thái form trư�
 
 Nếu đổi khoa, ngành, học viên hoặc loại yêu cầu làm phát sinh danh sách/trường phụ thuộc, chọn **Áp dụng để bổ sung trường phụ thuộc**, đợi danh sách tải xong, tải lại mẫu và điền tiếp. Không lưu khi còn trường mới chưa có trong file.
 
-## Chuẩn bị danh sách học trước khi nhập điểm
+## Nhập điểm theo lớp và môn
 
-Nếu lớp có thành viên nhưng bảng điểm trống, mở **Chuẩn bị nhập điểm → Bước 1 · Lập danh sách học bằng Excel**. Tải mẫu đã có mã học viên và các đăng ký hiện có. Trong sheet `Danh sach hoc`, điền ID lớp học phần từ sheet `Lop hoc phan`, lý do lập danh sách và số hồ sơ. Có thể thêm dòng cho học viên học nhiều môn; dòng có ID lớp học phần trống được bỏ qua. Upload để xem trước, rồi xác nhận thêm đăng ký. Không tự gán mọi học viên vào mọi môn, không tạo điểm hay hủy dữ liệu cũ trong bước này.
+Cán bộ chọn **Đơn vị/Khoa → Lớp → Học kỳ → Môn học**. Môn lấy từ đúng phiên bản/hướng CTĐT của lớp và phạm vi tài khoản. Bấm **Tải Excel học viên và điểm hiện có** để hệ thống tự chuẩn bị liên kết môn–học kỳ và danh sách học từ học viên hoạt động, có phân công CTĐT khớp lớp. Không cần tạo lớp học phần hay nhập file danh sách học riêng.
 
-Danh sách chỉ gồm học viên hoạt động trong lớp, có phân công CTĐT đang hoạt động đúng hướng và trong phạm vi tài khoản. Lớp học phần phải thuộc đúng học kỳ, khớp phiên bản môn trong CTĐT của lớp, thuộc phạm vi học phần và còn sức chứa. Đăng ký đã hủy/rút không được tự mở lại. Danh sách hành chính này do cán bộ nhập theo hồ sơ, yêu cầu cả quyền quản lý điểm và `REGISTRATION_MANAGE`; khác đăng ký tự phục vụ theo thời hạn của học viên. Không áp dụng cho đợt đã hủy/chốt hoặc lớp học phần dự kiến/đã hủy.
+`POST excel/mo-bang-diem` thực hiện trong một transaction, kiểm tra lại tài khoản/quyền/phạm vi, khóa lớp/học viên/học kỳ và tái sử dụng liên kết có sẵn. Tải lại không tạo trùng và không tạo/sửa điểm. Nếu chưa có liên kết, hệ thống tạo hồ sơ học kỳ CLOSED để không mở đăng ký tự phục vụ. Đăng ký đã hủy/rút không được tự mở lại. Không tự hợp nhất trường hợp môn có nhiều lớp giảng dạy đã có dữ liệu.
 
-API mới: `GET excel/chuan-bi`, `GET excel/danh-sach-mau`, `POST excel/danh-sach-kiem-tra`, `POST excel/danh-sach-luu`, cùng query `classId`, `termId`. Toàn bộ file được kiểm tra và lưu trong một transaction với audit; giữ nguyên đăng ký đã có. Bước 2 cấu hình quy tắc điểm có thể mở ngay cả khi chưa có dòng điểm. Bước 3 tải mẫu điểm chỉ bật khi đã có đăng ký.
+Nếu chưa có quy tắc, lần bấm tải đầu sẽ mở cửa sổ cấu hình tỷ lệ theo hồ sơ bằng Excel. Lưu quy tắc rồi bấm tải lại để nhận mẫu điểm mới nhất. Dùng **Quy tắc tính điểm môn đã chọn** để xem quy tắc đã lưu. Mẫu điểm chứa danh sách học viên và điểm cũ của riêng môn đã chọn. Nhập Excel, xem trước các ô khác biệt rồi xác nhận lưu. Quy tắc không được tự đoán hoặc gán mặc định.
+
+API `GET excel/mon-hoc?classId=...&termId=...` trả môn đúng CTĐT. `POST excel/mo-bang-diem` nhận `classId`, `termId`, `courseVersionId`. Các API danh sách học cũ còn giữ tương thích, không nằm trong giao diện nhập điểm chính.
 
 ## Bảng điểm và xung đột
 
@@ -43,10 +45,10 @@ API `quan-ly-diem/excel`:
 
 - `GET options`: khoa/lớp và học kỳ đã cấu hình trong phạm vi tài khoản, kể cả lớp chưa có điểm.
 - `GET rows?classId=...&termId=...`: đăng ký/kết quả theo lớp học viên và học kỳ, chỉ trả học viên và học phần có quyền đọc.
-- `GET mau?classId=...&termId=...`: chỉ cán bộ đào tạo có GRADE_READ + GRADE_MANAGE được tải file chỉnh sửa.
+- `GET mau?classId=...&termId=...&courseVersionId=...`: chỉ cán bộ đào tạo có GRADE_READ + GRADE_MANAGE được tải file chỉnh sửa.
 - `POST kiem-tra` và `POST luu`: multipart `file`, XLSX tối đa 5MB/5000 dòng. Cùng file được đọc và xác thực lại khi lưu; không tin dữ liệu preview do trình duyệt gửi.
 
-Mẫu chứa điểm hiện có và bản gốc được ký HMAC theo tài khoản/lớp/học kỳ. Mã đăng ký, học viên, môn, lớp học phần và trạng thái không được sửa. Dòng thay đổi cần lý do tối thiểu 10 ký tự và số hồ sơ.
+Mẫu chứa điểm hiện có và bản gốc được ký HMAC theo tài khoản/lớp/học kỳ/môn. Mã đăng ký, học viên, môn, lớp học phần và trạng thái không được sửa. Dòng thay đổi cần lý do tối thiểu 10 ký tự và số hồ sơ.
 
 So sánh ba phía: gốc trong mẫu → giá trị mới trong Excel → giá trị hiện tại trong SQL. Chỉ sửa những ô được thay đổi trong file. Nếu người khác sửa một ô khác thì giữ lại thay đổi đó; nếu cùng ô đã thay đổi hoặc phiên bản kết quả/quy tắc/trạng thái đã thay đổi thì từ chối toàn bộ file. Dòng không đổi không tạo lịch sử hay tăng revision. Bỏ dòng khỏi file không xóa kết quả. Ô trống khác điểm 0; xóa nội dung một điểm có sẵn là yêu cầu đưa điểm đó về NULL.
 
@@ -115,11 +117,11 @@ Mẫu Excel một hồ sơ sửa dòng 2; mẫu danh sách sửa các dòng có 
 
 Liên kết tài khoản: chọn tài khoản STUDENT và hồ sơ bằng các dropdown ngay trên màn hình. Nếu chưa có hồ sơ, chọn tạo mới và điền mã trong Excel. File chỉ gồm căn cứ xác minh, xác nhận đúng người và mã hồ sơ mới nếu cần; không cần tải nhiều mẫu chỉ để đổi lựa chọn tài khoản. Không đổi mật khẩu/email/vai trò, không chuyển phân công CTĐT cũ.
 
-## Lớp học phần phục vụ nhập điểm
+## Hoàn tất giảng dạy và chốt điểm
 
-Tại Quản lý điểm, cán bộ có đủ GRADE_READ, GRADE_MANAGE và REGISTRATION_MANAGE mở “Cấu hình lớp học phần và xác nhận hoàn tất”. Mẫu course-offerings chứa mã lớp, lựa chọn phiên bản học phần, học kỳ, sĩ số, trạng thái, lý do và số hồ sơ. Lớp mới phải Đang giảng dạy; sau kết thúc chọn Đã hoàn tất để đủ điều kiện chốt điểm. Không đổi môn/học kỳ/mã lớp cũ, không giảm sĩ số dưới số học viên hiện có, không hủy lớp còn học viên và không mở lại lớp hoàn tất. Thao tác kiểm tra quyền/phạm vi trong transaction và ghi audit.
+Sau khi nhập điểm, mở **Xác nhận môn đã giảng dạy xong**, tải mẫu Excel điền lý do/số hồ sơ rồi xác nhận. API `POST excel/hoan-tat-mon` chỉ cho cán bộ, kiểm tra môn trong CTĐT, lớp/học kỳ/phạm vi, trạng thái học kỳ và ghi audit. Thao tác này chỉ xác nhận hoàn tất giảng dạy; chốt từng kết quả vẫn yêu cầu đủ điểm và kiểm tra revision như trước. Không tự mở lại môn đã hoàn tất.
 
-Đây là quản lý danh sách học để nhập điểm, không mở lại chức năng tự đăng ký học phần. registration_periods/course_registrations vẫn được dùng nội bộ để giữ liên kết chính xác học viên–môn–lớp–học kỳ.
+`registration_periods`, `course_offerings`, `course_registrations` chỉ giữ liên kết nội bộ học viên–môn–học kỳ; không có chức năng học viên tự đăng ký học phần. Các lớp/điểm/lịch sử đang có được giữ nguyên.
 
 ## Dữ liệu sau dọn minh họa
 

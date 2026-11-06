@@ -119,7 +119,15 @@ export class MysqlProgramRepository extends ProgramRepository {
   async list(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "",
       status = query.selectedStatus || "ALL";
-    const where = ` WHERE ${READ_VERSION_SCOPE} AND ${LEVEL_FILTER} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
+    const versionScope =
+      query.selectedCatalog === "PUBLIC"
+        ? `${READ_VERSION_SCOPE} AND src.program_version_id IS NOT NULL`
+        : SCOPE;
+    const rootScope =
+      query.selectedCatalog === "PUBLIC"
+        ? `${READ_SCOPE} AND cs.program_id IS NOT NULL`
+        : SCOPE;
+    const where = ` WHERE ${versionScope} AND ${LEVEL_FILTER} AND (?='ALL' OR v.status=?) AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,v.program_name_snapshot)>0 OR LOCATE(?,v.version_code)>0)`;
     const level = query.selectedLevel || "ALL";
     const params = [
       actor.id,
@@ -144,7 +152,7 @@ export class MysqlProgramRepository extends ProgramRepository {
     const total = Number(count.total);
     const [unversioned] = await this.db.query(
       "SELECT COUNT(*) AS total FROM training_programs p JOIN education_levels e ON e.id=p.education_level_id LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id WHERE " +
-        READ_SCOPE +
+        rootScope +
         " AND " +
         LEVEL_FILTER +
         " AND NOT EXISTS (SELECT 1 FROM program_versions v WHERE v.program_id=p.id)",
@@ -176,9 +184,13 @@ export class MysqlProgramRepository extends ProgramRepository {
   }
   async unversioned(query: ProgramQuery, actor: ProgramActor) {
     const search = query.searchTerm || "";
+    const rootScope =
+      query.selectedCatalog === "PUBLIC"
+        ? `${READ_SCOPE} AND cs.program_id IS NOT NULL`
+        : SCOPE;
     const from = ` FROM training_programs p JOIN education_levels e ON e.id=p.education_level_id
       JOIN organizational_units u ON u.id=p.managing_unit_id JOIN majors m ON m.id=p.major_id LEFT JOIN program_catalog_sources cs ON cs.program_id=p.id
-      WHERE ${READ_SCOPE} AND ${LEVEL_FILTER} AND NOT EXISTS(SELECT 1 FROM program_versions v WHERE v.program_id=p.id)
+      WHERE ${rootScope} AND ${LEVEL_FILTER} AND NOT EXISTS(SELECT 1 FROM program_versions v WHERE v.program_id=p.id)
       AND (?='' OR LOCATE(?,p.program_code)>0 OR LOCATE(?,p.program_name)>0)`;
     const level = query.selectedLevel || "ALL";
     const params = [actor.id, level, level, level, search, search, search];

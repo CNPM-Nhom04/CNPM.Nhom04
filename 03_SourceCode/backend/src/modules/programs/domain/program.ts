@@ -20,6 +20,7 @@ export interface ProgramQuery {
   searchTerm?: string;
   selectedStatus?: string;
   selectedLevel?: "ALL" | "MASTER" | "DOCTOR";
+  selectedCatalog?: "MANAGED" | "PUBLIC";
 }
 export interface ProgramInput {
   maCTDT: string;
