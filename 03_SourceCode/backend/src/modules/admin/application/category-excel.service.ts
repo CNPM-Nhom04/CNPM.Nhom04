@@ -207,8 +207,8 @@ export class CategoryExcelService {
       for (let col = 1; col <= 6; col++)
         if (row.getCell(col).type === ValueType.Formula)
           throw new BadRequestException(`Dòng ${i}: không hỗ trợ công thức.`);
-      const [id, code, name, type, , status] = [1, 2, 3, 4, 5, 6].map((col) =>
-        row.getCell(col).text.trim(),
+      const [fileId, code, name, type, , status] = [1, 2, 3, 4, 5, 6].map(
+        (col) => row.getCell(col).text.trim(),
       );
       const categoryType = Object.entries(labels).find(
         ([key, label]) => key === type || label === type,
@@ -219,6 +219,16 @@ export class CategoryExcelService {
         throw new BadRequestException(
           `Dòng ${i}: chọn loại danh mục và trạng thái trong danh sách.`,
         );
+      // Recover an omitted hidden ID only from this account's signed snapshot.
+      // A code that was not present when the file was downloaded remains new.
+      const matchingOriginal = !fileId
+        ? [...original.values()].find(
+            (item) =>
+              item.loaiDanhMuc === categoryType &&
+              item.maDanhMuc.toLowerCase() === code.toLowerCase(),
+          )
+        : undefined;
+      const id = fileId || matchingOriginal?.id || "";
       if (id && (!original.has(id) || seen.has(id)))
         throw new BadRequestException(
           `Dòng ${i}: ID không thuộc mẫu hoặc bị lặp.`,

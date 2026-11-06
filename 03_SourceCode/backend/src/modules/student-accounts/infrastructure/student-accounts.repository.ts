@@ -19,7 +19,7 @@ import {
   StudentAccountsRepository,
 } from "../domain/student-accounts";
 const TRACK_FROM = ` FROM program_version_tracks t JOIN program_versions v ON v.id=t.program_version_id JOIN training_programs p ON p.id=v.program_id JOIN organizational_units u ON u.id=p.managing_unit_id JOIN majors m ON m.id=p.major_id JOIN education_levels e ON e.id=p.education_level_id`;
-const TRACK_VALID = `t.status='ACTIVE' AND v.status IN('PUBLISHED','ARCHIVED') AND p.status='ACTIVE' AND u.status='ACTIVE' AND m.status='ACTIVE' AND e.status='ACTIVE'`;
+const TRACK_VALID = `p.deleted_at IS NULL AND t.status='ACTIVE' AND v.status IN('PUBLISHED','ARCHIVED') AND p.status='ACTIVE' AND u.status='ACTIVE' AND m.status='ACTIVE' AND e.status='ACTIVE'`;
 const TRACK_SELECT =
   `SELECT CAST(t.id AS CHAR) id,t.track_code_snapshot trackCode,t.track_name_snapshot trackName,v.version_code versionCode,v.program_name_snapshot programName,v.status versionStatus,v.cohort_year cohortYear,CAST(u.id AS CHAR) unitId,u.unit_name unitName` +
   TRACK_FROM;

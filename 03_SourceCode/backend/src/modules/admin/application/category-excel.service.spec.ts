@@ -88,22 +88,60 @@ describe("category Excel with real catalog rows", () => {
       input: { maDanhMuc: "NEW", trangThai: true },
     });
   });
-  it.each(["formula", "identity", "signature", "duplicate", "status"])(
-    "rejects invalid %s before repository mutations",
-    async (kind) => {
-      const upload = await file((book) => {
-        const s = book.getWorksheet("Danh muc")!;
-        if (kind === "formula")
-          s.getCell("C2").value = { formula: "1+1", result: 2 };
-        if (kind === "identity") s.getCell("A2").value = "BAC_DAO_TAO:999";
-        if (kind === "signature")
-          book.getWorksheet("_snapshot")!.getCell("B2").value = "{}";
-        if (kind === "duplicate")
-          s.addRow(["", "doctor", "Trùng", "Bậc đào tạo", "", "Hoạt động"]);
-        if (kind === "status") s.getCell("F2").value = "khác";
-      });
-      await expect(service.import(upload, actor, true)).rejects.toThrow();
-      expect(repository.importCategories).not.toHaveBeenCalled();
-    },
-  );
+  it("recovers a missing hidden ID from the signed original code and keeps the baseline", async () => {
+    const upload = await file((book) => {
+      const s = book.getWorksheet("Danh muc")!;
+      s.getCell("A4").value = null;
+      s.getCell("E4").value = "Mô tả đã sửa";
+    });
+    await service.import(upload, actor, false);
+    expect(repository.importCategories.mock.calls[0][0][2]).toMatchObject({
+      id: "KHOA_QUAN_LY:1",
+      original: { moTa: "Khoa" },
+      input: { moTa: "Mô tả đã sửa" },
+    });
+  });
+  it("does not infer existing records outside the signed snapshot", async () => {
+    const upload = await file((book) => {
+      book
+        .getWorksheet("Danh muc")!
+        .addRow([
+          "",
+          "QA_KHOI_01",
+          "Khối thử",
+          "Khối kiến thức",
+          "Mô tả",
+          "Hoạt động",
+        ]);
+    });
+    await service.import(upload, actor, false);
+    expect(repository.importCategories.mock.calls[0][0][3]).toMatchObject({
+      id: null,
+      original: null,
+    });
+  });
+  it.each([
+    "formula",
+    "identity",
+    "signature",
+    "duplicate",
+    "status",
+    "duplicate-identity",
+  ])("rejects invalid %s before repository mutations", async (kind) => {
+    const upload = await file((book) => {
+      const s = book.getWorksheet("Danh muc")!;
+      if (kind === "formula")
+        s.getCell("C2").value = { formula: "1+1", result: 2 };
+      if (kind === "identity") s.getCell("A2").value = "BAC_DAO_TAO:999";
+      if (kind === "signature")
+        book.getWorksheet("_snapshot")!.getCell("B2").value = "{}";
+      if (kind === "duplicate")
+        s.addRow(["", "doctor", "Trùng", "Bậc đào tạo", "", "Hoạt động"]);
+      if (kind === "status") s.getCell("F2").value = "khác";
+      if (kind === "duplicate-identity")
+        s.addRow(["", "FIT", "Lặp dòng", "Khoa / Đơn vị", "", "Hoạt động"]);
+    });
+    await expect(service.import(upload, actor, true)).rejects.toThrow();
+    expect(repository.importCategories).not.toHaveBeenCalled();
+  });
 });

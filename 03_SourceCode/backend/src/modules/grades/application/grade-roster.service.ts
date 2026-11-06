@@ -125,6 +125,33 @@ export class GradeRosterService {
       throw new BadRequestException(
         "Danh sách vượt giới hạn 5000 dòng của file Excel.",
       );
+    book.definedNames.add(
+      `'Hoc vien'!$A$2:$A$${members.rowCount}`,
+      "MaHocVien",
+    );
+    book.definedNames.add(
+      `'Lop hoc phan'!$A$2:$A$${offerings.rowCount}`,
+      "LopHocPhan",
+    );
+    const validationLastRow = Math.min(
+      5001,
+      Math.max(101, sheet.rowCount + 20),
+    );
+    for (let row = 2; row <= validationLastRow; row++) {
+      for (const [col, name] of [
+        [1, "MaHocVien"],
+        [2, "LopHocPhan"],
+      ] as const) {
+        sheet.getCell(row, col).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [name],
+          showErrorMessage: true,
+          errorTitle: "Giá trị không hợp lệ",
+          error: "Chọn giá trị trong danh sách của lớp và học kỳ này.",
+        };
+      }
+    }
     const meta = book.addWorksheet("_context", { state: "veryHidden" });
     meta.addRow(["roster-v1", classId, termId]);
     const guide = exportSheet(book, "Huong dan", ["Hướng dẫn"], [130]);

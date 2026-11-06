@@ -14,6 +14,7 @@ interface Row {
   sourceMajorCode?: string | null;
   sourceTotalCredits?: number | null;
   sourceReadOnly?: boolean;
+  canCreateVersion?: boolean;
   id: string;
   programId?: string;
   maCTDT: string;
@@ -291,7 +292,20 @@ export function ProgramList({
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {result.permissions.canEdit &&
+                          item.sourceReadOnly &&
+                          item.canCreateVersion &&
+                          item.programId && (
+                            <Link
+                              href={`/dashboard/chuong-trinh-dao-tao/tao-moi?programId=${item.programId}`}
+                            >
+                              <Button variant="outline" size="sm">
+                                Tạo phiên bản nội bộ
+                              </Button>
+                            </Link>
+                          )}
+                        {result.permissions.canEdit &&
                           !item.sourceReadOnly &&
+                          item.canCreateVersion &&
                           item.programId && (
                             <Link
                               href={

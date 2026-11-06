@@ -28,6 +28,33 @@ describe("Degree filters and official source visibility", () => {
       expect(query.mock.calls[0][1].slice(-2)).toEqual([20, 20]);
     },
   );
+  it.each([false, true])(
+    "only exposes source working-copy creation within writable scope: %s",
+    async (owned) => {
+      const query = jest
+        .fn()
+        .mockResolvedValueOnce([
+          { id: "50", programId: "5", sourceReadOnly: 1, status: "DRAFT" },
+        ])
+        .mockResolvedValueOnce([{ total: 1 }])
+        .mockResolvedValueOnce([{ total: 0 }])
+        .mockResolvedValueOnce(owned ? [{ id: "5" }] : []);
+      const repo = new MysqlProgramRepository({
+        query,
+      } as unknown as DataSource);
+      const result = await repo.list(
+        { page: 1, limit: 20 },
+        { ...actor, permissions: ["PROGRAM_READ", "PROGRAM_EDIT"] },
+      );
+      expect(result.data[0].canCreateVersion).toBe(owned);
+      expect(query.mock.calls[0][0]).toContain(
+        "OR src.program_version_id IS NOT NULL",
+      );
+      expect(query.mock.calls[3][0]).not.toContain(
+        "OR src.program_version_id IS NOT NULL",
+      );
+    },
+  );
   it("filters unversioned roots at the SQL level as well", async () => {
     const query = jest
       .fn()
@@ -50,13 +77,15 @@ describe("Degree filters and official source visibility", () => {
       manager: { query },
     } as unknown as DataSource);
     await expect(repo.detail("50", actor)).rejects.toThrow();
-    expect(query.mock.calls[0][0]).toContain("OR cs.program_id IS NOT NULL");
+    expect(query.mock.calls[0][0]).toContain(
+      "OR src.program_version_id IS NOT NULL",
+    );
     query.mockClear();
     await expect(
       (repo as any).get({ query }, "50", actor, true),
     ).rejects.toThrow();
     expect(query.mock.calls[0][0]).not.toContain(
-      "OR cs.program_id IS NOT NULL",
+      "OR src.program_version_id IS NOT NULL",
     );
     expect(query.mock.calls[0][0]).toContain("FOR UPDATE");
   });

@@ -171,10 +171,22 @@ export default function StudentClassesPage() {
             đúng CTĐT theo lớp quản lý.
           </p>
         </div>
-        <Button disabled={busy || !options} onClick={() => begin(null)}>
+        <Button
+          disabled={busy || !options?.tracks.length}
+          onClick={() => begin(null)}
+        >
           Tạo lớp quản lý
         </Button>
       </header>
+      {options && !options.tracks.length && (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          Chưa có phiên bản CTĐT và hướng đào tạo đủ điều kiện để tạo lớp. Cần
+          hoàn thiện cấu trúc và ban hành CTĐT trước khi tiếp nhận học viên.
+        </p>
+      )}
       <AdminFeedback
         error={error || optionsError}
         message={notice}

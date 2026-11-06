@@ -35,6 +35,7 @@ const BASE_QUERY = `
       JOIN program_version_tracks t ON t.id = a.program_version_track_id
       JOIN program_versions av ON av.id = t.program_version_id
       WHERE av.program_id = p.id AND a.assignment_status = 'ACTIVE'
+        AND (? IS NULL OR EXISTS(SELECT 1 FROM vw_user_student_access sa WHERE sa.user_id=? AND sa.student_id=a.student_id))
     ) AS soHocVien
   FROM training_programs p
   JOIN education_levels e ON e.id = p.education_level_id
@@ -68,6 +69,8 @@ export class MysqlReportRepository implements ReportRepository {
     const search = filter.searchTerm?.trim() || "";
     const degree = filter.selectedDegree?.trim() || "ALL";
     return [
+      filter.actorId || null,
+      filter.actorId || null,
       search,
       search,
       search,

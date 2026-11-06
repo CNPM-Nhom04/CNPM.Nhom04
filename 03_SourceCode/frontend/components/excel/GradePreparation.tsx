@@ -110,8 +110,8 @@ export function GradePreparation({
           {!hasRows && (
             <p className="rounded-lg bg-amber-50 p-3 text-amber-900">
               Lớp đã có {data.members.length} học viên phù hợp trong phạm vi,
-              nhưng chưa có dòng đăng ký học phần để nhập điểm ở học kỳ này. Cần
-              lập danh sách học theo hồ sơ trước.
+              nhưng chưa có danh sách học theo môn để nhập điểm ở học kỳ này.
+              Cần lập danh sách học theo hồ sơ trước.
             </p>
           )}
           {!data.members.length && (
@@ -132,14 +132,15 @@ export function GradePreparation({
             </summary>
             <div className="mt-3 space-y-3">
               <p>
-                Mẫu có mã học viên và đăng ký hiện có. Chọn ID lớp học phần từ
-                danh sách trong file, điền lý do và số hồ sơ. Hệ thống chỉ thêm
-                các đăng ký bạn xác nhận; giữ nguyên điểm và đăng ký đã có.
+                Mẫu có mã học viên và danh sách học hiện có. Chọn ID lớp học
+                phần từ danh sách trong file, điền lý do và số hồ sơ. Hệ thống
+                chỉ thêm các dòng bạn xác nhận; giữ nguyên điểm và danh sách đã
+                có.
               </p>
               {!data.permissions.canPrepare ? (
                 <p className="text-amber-800">
-                  Tài khoản cần thêm quyền quản lý đăng ký (REGISTRATION_MANAGE)
-                  để lập danh sách học; quyền nhập điểm riêng không đủ.
+                  Tài khoản cần quyền lập danh sách học; quyền nhập điểm riêng
+                  không đủ.
                 </p>
               ) : (
                 <div className="flex gap-3 flex-wrap items-center">

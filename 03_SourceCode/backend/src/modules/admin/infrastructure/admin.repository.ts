@@ -905,7 +905,7 @@ export class MysqlAdminRepository extends AdminRepository {
         );
         if (duplicate)
           throw new ConflictException(
-            `Mã danh mục ${input.maDanhMuc} đã tồn tại.`,
+            `Mã danh mục ${input.maDanhMuc} đã tồn tại. Nếu đang sửa danh mục, hãy tải lại Excel có danh sách hiện có sau khi thêm thành công, rồi sửa trực tiếp dòng đó; giữ nguyên ID ẩn.`,
           );
         changes.push({
           id: row.id,

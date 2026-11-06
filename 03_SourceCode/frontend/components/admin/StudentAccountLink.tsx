@@ -160,32 +160,10 @@ export function StudentAccountLink({
           <Button variant="outline" disabled={busy} onClick={onClose}>
             Đóng
           </Button>
-          <Button
-            type="submit"
-            form="student-account-link"
-            isLoading={busy}
-            disabled={
-              busy ||
-              !confirmed ||
-              !account ||
-              !!accountError ||
-              (!account.studentId &&
-                mode === "EXISTING" &&
-                (!profile || !!profileError))
-            }
-          >
-            Lưu liên kết
-          </Button>
         </>
       }
     >
-      <ExcelOnlyForm
-        recordLabel={`${item.code} — ${item.name}`}
-        recordKey={item.id}
-        id="student-account-link"
-        onSubmit={save}
-        className="space-y-4 text-sm text-slate-950"
-      >
+      <div className="space-y-4 text-sm text-slate-950">
         <div className="rounded border border-blue-100 bg-blue-50 p-4 leading-7">
           <strong>{item.name}</strong>
           <p>
@@ -224,7 +202,7 @@ export function StudentAccountLink({
           />
         </label>
         <label className="block space-y-2">
-          Tài khoản có sẵn trong SQL
+          Tài khoản học viên có sẵn
           <select
             aria-label="Tài khoản học viên để liên kết"
             className={control}
@@ -292,9 +270,7 @@ export function StudentAccountLink({
                   setConfirmed(false);
                 }}
               >
-                <option value="EXISTING">
-                  Chọn hồ sơ học viên có sẵn từ SQL
-                </option>
+                <option value="EXISTING">Chọn hồ sơ học viên có sẵn</option>
                 <option value="NEW">Tạo hồ sơ mới cho tài khoản này</option>
               </select>
             </label>
@@ -316,7 +292,7 @@ export function StudentAccountLink({
                   />
                 </label>
                 <label className="block space-y-2">
-                  Hồ sơ từ CSDL
+                  Hồ sơ học viên có sẵn
                   <select
                     aria-label="Hồ sơ học viên để liên kết"
                     className={control}
@@ -365,22 +341,6 @@ export function StudentAccountLink({
               </>
             ) : (
               <>
-                <label className="block space-y-2">
-                  Mã học viên mới
-                  <input
-                    aria-label="Mã học viên mới để liên kết"
-                    className={control}
-                    required
-                    pattern="[A-Za-z0-9_.-]+"
-                    maxLength={50}
-                    disabled={busy}
-                    value={code}
-                    onChange={(e) => {
-                      setCode(e.target.value);
-                      setConfirmed(false);
-                    }}
-                  />
-                </label>
                 <p className="rounded bg-amber-50 p-3 leading-7 text-amber-900">
                   Hồ sơ mới dùng họ tên trong tài khoản:{" "}
                   <strong>{account.fullName}</strong>, khoa và khóa của lớp đang
@@ -390,31 +350,67 @@ export function StudentAccountLink({
             )}
           </>
         )}
-        <label className="block space-y-2">
-          Căn cứ liên kết
-          <textarea
-            aria-label="Căn cứ xác minh liên kết"
-            className={control}
-            required
-            maxLength={1000}
-            rows={2}
-            value={reason}
-            disabled={busy}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Ví dụ: đã đối chiếu mã học viên và danh sách lớp được bàn giao"
-          />
-        </label>
-        <label className="flex items-start gap-3 leading-6">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={confirmed}
-            disabled={busy}
-            onChange={(e) => setConfirmed(e.target.checked)}
-          />
-          Tôi đã xác minh tài khoản, hồ sơ và lớp/CTĐT này thuộc đúng học viên.
-        </label>
-      </ExcelOnlyForm>
+        {account && (account.studentId || mode === "NEW" || profile) ? (
+          <ExcelOnlyForm
+            recordLabel={`${item.code} — ${account.username}`}
+            recordKey={`${item.id}:${account.id}:${mode}:${profile?.id || ""}`}
+            id="student-account-link"
+            onSubmit={save}
+            heading="Hồ sơ liên kết tài khoản bằng Excel"
+            description="Tài khoản và hồ sơ đã chọn ở trên. Tải mẫu, điền căn cứ xác minh và chọn Có sau khi đã đối chiếu đúng người, đúng lớp. Chỉ sửa dòng 2."
+            submitLabel="Xác nhận liên kết tài khoản vào lớp"
+            showDependentStep={false}
+          >
+            {!account.studentId && mode === "NEW" && (
+              <label className="block space-y-2">
+                Mã học viên mới
+                <input
+                  aria-label="Mã học viên mới để liên kết"
+                  className={control}
+                  required
+                  pattern="[A-Za-z0-9_.-]+"
+                  maxLength={50}
+                  disabled={busy}
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setConfirmed(false);
+                  }}
+                />
+              </label>
+            )}
+            <label className="block space-y-2">
+              Căn cứ liên kết
+              <textarea
+                aria-label="Căn cứ xác minh liên kết"
+                className={control}
+                required
+                maxLength={1000}
+                rows={2}
+                value={reason}
+                disabled={busy}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Ví dụ: đã đối chiếu mã học viên và danh sách lớp được bàn giao"
+              />
+            </label>
+            <label className="flex items-start gap-3 leading-6">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={confirmed}
+                disabled={busy}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              Tôi đã xác minh tài khoản, hồ sơ và lớp/CTĐT này thuộc đúng học
+              viên.
+            </label>
+          </ExcelOnlyForm>
+        ) : (
+          <p className="rounded bg-slate-50 p-3">
+            Chọn tài khoản học viên và cách liên kết hồ sơ để tải mẫu Excel.
+          </p>
+        )}
+      </div>
     </Modal>
   );
 }

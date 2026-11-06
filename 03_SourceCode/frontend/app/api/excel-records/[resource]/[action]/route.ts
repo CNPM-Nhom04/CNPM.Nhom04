@@ -11,6 +11,7 @@ const resources = new Set([
   "supervisors",
   "defenses",
   "documents",
+  "course-offerings",
 ]);
 async function handle(
   request: NextRequest,

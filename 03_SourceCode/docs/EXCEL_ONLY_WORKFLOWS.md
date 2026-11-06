@@ -100,15 +100,31 @@ Các mẫu mới của khoa, ngành, tài khoản, lớp học viên, học ph�
 
 Mọi dòng ghi đi qua dịch vụ/repository nghiệp vụ gốc. DataSource dùng riêng cho batch gắn với một EntityManager; các transaction của repository tham gia transaction ngoài, không thay đổi DataSource toàn cục. Một dòng lỗi sẽ rollback cả file, gồm audit. Trường nền xám giữ nguyên theo quyền/trạng thái: học phần sửa tạo bản nháp mới; CTĐT chỉ sửa DRAFT/RETURNED; đề tài chỉ sửa trạng thái cho phép; GVHD đã có chỉ đổi trạng thái; lịch đã lập không đổi thông tin hội đồng/ngày/địa điểm bằng luồng ghi kết quả.
 
-Cấu hình, quy tắc tính điểm, quy định tốt nghiệp, hồ sơ minh chứng, biên bản xét duyệt và các hồ sơ chốt/hủy dùng bảng ngang một dòng, có sẵn dữ liệu hiện tại và tên đối tượng. Không còn xuất mẫu dọc Mã trường/Thông tin/Giá trị mới. Bộ đọc vẫn nhận mẫu dọc cũ để tương thích; các mẫu tải mới dùng định dạng ngang. Thao tác phụ thuộc lựa chọn giữ bước áp dụng để bổ sung trường rồi tải lại mẫu.
+Cấu hình, quy tắc tính điểm, quy định tốt nghiệp, hồ sơ minh chứng, biên bản xét duyệt và các hồ sơ chốt/hủy dùng bảng ngang một dòng, có sẵn dữ liệu hiện tại và tên đối tượng. Không còn xuất mẫu dọc Mã trường/Thông tin/Giá trị mới. Bộ đọc vẫn nhận mẫu dọc cũ để tương thích; các mẫu tải mới dùng định dạng ngang. Các form phụ thuộc dùng bước áp dụng để bổ sung trường; riêng liên kết tài khoản đã đưa lựa chọn ra màn hình.
 
 Mẫu học viên của lớp điền sẵn mã, họ tên, email và tên đăng nhập ngay ở sheet `Hoc vien`. Dòng đã có tài khoản và không đổi được bỏ qua, không cấp lại mật khẩu; chỉnh sửa tài khoản hiện có dùng mẫu Người dùng. Thêm mới vẫn giữ kiểm tra trùng, liên kết hồ sơ SQL, cấp mật khẩu ngẫu nhiên và tải file bàn giao một lần. Chỉ tính học viên mới vào giới hạn mỗi lần nhập.
 
 Kiểm tra cập nhật: toàn bộ 54 suites/411 tests backend và production build frontend đã thành công. Đối chiếu chỉ đọc mẫu thật và preview file không đổi cho các tài nguyên có dữ liệu; văn bản cổng thông tin hiện chưa có bản ghi nên mẫu có dòng tiêu đề, danh sách chọn và ví dụ. Chưa kiểm tra thao tác trình duyệt do Chromium thiếu thư viện hệ thống như đã ghi phía trên.
 
 
-## Cấu hình Admin: danh sách ngoại ngữ và đơn vị ngày
+## Cấu hình và danh sách chọn
 
-Hai cột chuẩn ngoại ngữ Thạc sĩ/Tiến sĩ trong mẫu cấu hình dùng danh sách chọn từ `GET /admin/cau-hinh/options`: các chuẩn đã cấu hình trong hệ thống, các yêu cầu ngoại ngữ trên CTĐT chưa bị bỏ danh mục và giá trị mặc định hiện có. Backend kiểm tra lựa chọn trước khi lưu; không tự bổ sung mức chứng chỉ/chuẩn đầu ra từ phỏng đoán.
+Cấu hình đang sử dụng gồm điểm đạt học phần và danh sách chuẩn ngoại ngữ Thạc sĩ/Tiến sĩ. Hai tham số đăng ký học phần đã bỏ khỏi giao diện/API và CSDL bằng migration TrainingSettingsScope1794300000000. Định mức tín chỉ của CTĐT và hướng học vẫn là nguồn dùng để kiểm tra cấu trúc và xét tốt nghiệp; không thay bằng tham số mặc định toàn hệ thống.
 
-Cột thời hạn có tiêu đề tiếng Việt ghi rõ `(ngày)`, nhận số nguyên 1–365; trang Admin hiển thị giá trị kèm `ngày`. Đây vẫn là cấu hình hiện có, không bổ sung logic tự đóng đợt đăng ký trong thay đổi này. Mẫu một dòng chỉ sửa dòng 2, ô F2/G2 có danh sách ngoại ngữ, H2 là số ngày. Danh sách Excel dùng defined names để tham chiếu sheet lựa chọn. Tải mẫu mới sau cập nhật để có tiêu đề và danh sách chọn.
+Mẫu Excel một hồ sơ sửa dòng 2; mẫu danh sách sửa các dòng có ID ẩn và thêm bản ghi ở dòng trống. Danh sách chọn tham chiếu sheet tra cứu bằng defined names để Excel hiển thị menu thả xuống. File cũ trước khi đổi cấu trúc phải tải lại.
+
+Liên kết tài khoản: chọn tài khoản STUDENT và hồ sơ bằng các dropdown ngay trên màn hình. Nếu chưa có hồ sơ, chọn tạo mới và điền mã trong Excel. File chỉ gồm căn cứ xác minh, xác nhận đúng người và mã hồ sơ mới nếu cần; không cần tải nhiều mẫu chỉ để đổi lựa chọn tài khoản. Không đổi mật khẩu/email/vai trò, không chuyển phân công CTĐT cũ.
+
+## Lớp học phần phục vụ nhập điểm
+
+Tại Quản lý điểm, cán bộ có đủ GRADE_READ, GRADE_MANAGE và REGISTRATION_MANAGE mở “Cấu hình lớp học phần và xác nhận hoàn tất”. Mẫu course-offerings chứa mã lớp, lựa chọn phiên bản học phần, học kỳ, sĩ số, trạng thái, lý do và số hồ sơ. Lớp mới phải Đang giảng dạy; sau kết thúc chọn Đã hoàn tất để đủ điều kiện chốt điểm. Không đổi môn/học kỳ/mã lớp cũ, không giảm sĩ số dưới số học viên hiện có, không hủy lớp còn học viên và không mở lại lớp hoàn tất. Thao tác kiểm tra quyền/phạm vi trong transaction và ghi audit.
+
+Đây là quản lý danh sách học để nhập điểm, không mở lại chức năng tự đăng ký học phần. registration_periods/course_registrations vẫn được dùng nội bộ để giữ liên kết chính xác học viên–môn–lớp–học kỳ.
+
+## Dữ liệu sau dọn minh họa
+
+Theo lựa chọn đã xác nhận, dữ liệu MIT/TEST_MIT_01/ENG999/sp/sp1 và các lớp, hồ sơ, điểm, đề tài, bảo vệ, xét duyệt phụ thuộc đã được dọn; tài khoản liên quan được vô hiệu hóa, thu hồi phiên. Giữ audit và bản sao lưu riêng trong artifacts/backups. Không chuyển điểm/môn của MIT sang AGU.
+
+Nguồn AGU vẫn gồm 18 mục ngành và 38 phiên bản; chưa có môn/hướng được số hóa trong curriculum_courses. Không suy diễn cấu trúc, công bố nội bộ hoặc hồ sơ học viên từ tên ngành. Các trang lớp/điểm/xét duyệt trống khi chưa có dữ liệu nghiệp vụ mới là đúng. Bộ lọc hiện thống nhất việc loại CTĐT đã xóa; nguồn công khai có thể xem/so sánh metadata theo quyền đọc nhưng không tự có quyền ghi.
+
+Script scripts/maintenance/cleanup-legacy-data.cjs chỉ dùng cho việc dọn dữ liệu mẫu đã duyệt, dry-run mặc định. Trước apply có bản sao đầy đủ, không tắt khóa ngoại và luôn khôi phục trigger bảo vệ. Không chạy lại để xóa dữ liệu đào tạo thật. Không commit artifacts/backups, .env, mật khẩu hoặc file bàn giao tài khoản.

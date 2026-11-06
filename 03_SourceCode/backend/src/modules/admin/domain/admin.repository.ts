@@ -67,11 +67,7 @@ export interface CategoryItem extends CategoryInput {
   id: string;
 }
 export const SETTING_DEFAULTS = {
-  maxTinChiHocKy: "18",
-  minTinChiTotNghiepThacSi: "60",
-  minTinChiTotNghiepTienSi: "90",
   diemDatHocPhan: "5.5",
-  thoiHanDangKyToiDa: "14",
   ngoaiNguBatBuocThacSi: "VSTEP B2 / IELTS 6.0",
   ngoaiNguBatBuocTienSi: "IELTS 6.5",
 };

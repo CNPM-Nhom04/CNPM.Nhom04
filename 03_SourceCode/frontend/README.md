@@ -101,7 +101,7 @@ Học viên đăng nhập tại trang chủ và dùng `/ctdt-cua-toi` bên ngoà
 
 Admin nhập tài khoản học viên theo lớp tại `/dashboard/admin/lop-hoc-vien`: tạo lớp gắn phiên bản/hướng SQL → tải mẫu → kiểm tra Excel → tạo tài khoản và tải file bàn giao. Học viên phải đổi mật khẩu lần đầu, sau đó tra cứu `/ctdt-cua-toi`. Chạy migration mới trước khi dùng. Hướng dẫn test và đối chiếu bảng DBeaver: [Student Accounts README](../backend/src/modules/student-accounts/README.md).
 
-Ma trận quyền và các chức năng chưa triển khai: [Đối chiếu phân quyền](../../docs/ACCESS_REVIEW.md). Xuất Excel báo cáo/so sánh cần `PROGRAM_EXPORT` ngoài quyền xem chức năng; Admin hiện không được cấp quyền xuất này trong SQL.
+Quyền thực tế được kiểm tra từ SQL bởi các guard NestJS; menu dùng cùng profile. Admin được xuất báo cáo; giảng viên chỉ xem/in điểm. Xuất báo cáo/so sánh cần PROGRAM_EXPORT cùng quyền đọc tương ứng.
 
 Trong **Lớp & Tài khoản học viên**, nút **Liên kết tài khoản** dành cho tài khoản STUDENT đã có: chọn hồ sơ từ SQL hoặc tạo hồ sơ mới theo mã học viên đã xác minh, gắn đúng lớp/CTĐT và giữ nguyên mật khẩu/quyền. Chi tiết: [Student Accounts README](../backend/src/modules/student-accounts/README.md).
 
