@@ -95,6 +95,266 @@ export class MysqlGradeRepository extends GradeRepository {
     );
     return { data: rows, permissions: { canManage: a.canManage } };
   }
+  async sheetCourses(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    manager?: EntityManager,
+  ) {
+    const m = manager || this.db.manager;
+    const data = await this.preparation(classId, termId, a, m);
+    return m.query(
+      `SELECT DISTINCT CAST(cv.id AS CHAR) courseVersionId,c.course_code courseCode,
+      cv.course_name courseName,cv.version_no versionNo
+      FROM curriculum_courses cc JOIN course_versions cv ON cv.id=cc.course_version_id
+      JOIN courses c ON c.id=cv.course_id
+      WHERE cc.program_version_track_id=? AND ${COURSE_SCOPE}
+      ORDER BY c.course_code,cv.version_no`,
+      [data.context.trackId, a.id],
+    );
+  }
+  async openSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    a: GradeActor,
+  ) {
+    if (!a.canManage || !a.canPrepare)
+      throw new ForbiddenException(
+        "Chỉ cán bộ đào tạo được chuẩn bị bảng điểm.",
+      );
+    return this.write(a, async (m) => {
+      const initial = await this.preparation(classId, termId, a, m);
+      await m.query("SELECT id FROM student_classes WHERE id=? FOR UPDATE", [
+        classId,
+      ]);
+      for (const member of [...initial.members].sort((x, y) =>
+        BigInt(x.studentId) < BigInt(y.studentId) ? -1 : 1,
+      ))
+        await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
+          member.studentId,
+        ]);
+      const data = await this.preparation(classId, termId, a, m);
+      if (data.members.length > 5000)
+        throw new BadRequestException("Tối đa 5000 học viên mỗi bảng điểm.");
+      const [course] = await m.query(
+        `SELECT cv.id,cv.status,c.status courseStatus,
+        (cv.effective_from<=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR) AND (cv.effective_to IS NULL OR cv.effective_to>=DATE(UTC_TIMESTAMP()+INTERVAL 7 HOUR))) effective
+        FROM curriculum_courses cc JOIN course_versions cv ON cv.id=cc.course_version_id JOIN courses c ON c.id=cv.course_id
+        WHERE cc.program_version_track_id=? AND cv.id=? AND ${COURSE_SCOPE} FOR UPDATE`,
+        [data.context.trackId, courseVersionId, a.id],
+      );
+      if (!course)
+        throw new ForbiddenException(
+          "Môn không thuộc CTĐT của lớp hoặc ngoài phạm vi tài khoản.",
+        );
+      const [term] = await m.query(
+        "SELECT * FROM academic_terms WHERE id=? FOR UPDATE",
+        [termId],
+      );
+      if (!term) throw new NotFoundException("Không tìm thấy học kỳ.");
+      const existing = (await this.excelRows(classId, termId, a, m)).filter(
+        (r) => r.courseVersionId === courseVersionId,
+      );
+      const ids = [...new Set<string>(existing.map((r) => r.offeringId))];
+      if (ids.length > 1)
+        throw new ConflictException(
+          "Môn có nhiều lớp giảng dạy trong học kỳ; cần đối chiếu danh sách hiện có trước khi nhập.",
+        );
+      if (data.context.status !== "ACTIVE" || !data.members.length) {
+        if (ids.length === 1) return { offeringId: ids[0], added: 0 };
+        throw new ConflictException(
+          "Lớp phải đang hoạt động và có học viên được phân công đúng CTĐT để mở bảng điểm mới.",
+        );
+      }
+      let offeringId = ids[0];
+      // Preserve an unused, explicitly configured offering when it is unambiguous.
+      if (!offeringId) {
+        const unused = data.offerings.filter(
+          (o) =>
+            o.courseVersionId === courseVersionId &&
+            Number(o.enrolled) === 0 &&
+            o.status !== "COMPLETED",
+        );
+        if (unused.length === 1) offeringId = unused[0].offeringId;
+      }
+      const code = `GRADE-${classId}-${termId}-${courseVersionId}`;
+      if (!offeringId) {
+        const [old] = await m.query(
+          "SELECT CAST(id AS CHAR) id FROM course_offerings WHERE class_code=? AND course_version_id=? FOR UPDATE",
+          [code, courseVersionId],
+        );
+        offeringId = old?.id;
+      }
+      if (!offeringId) {
+        if (
+          course.status !== "ACTIVE" ||
+          course.courseStatus !== "ACTIVE" ||
+          !Number(course.effective) ||
+          term.status !== "ACTIVE"
+        )
+          throw new ConflictException(
+            "Môn và học kỳ phải đang hoạt động để mở bảng điểm mới.",
+          );
+        let [period] = await m.query(
+          "SELECT CAST(id AS CHAR) id FROM registration_periods WHERE academic_term_id=? AND status IN ('OPEN','CLOSED') ORDER BY id LIMIT 1 FOR UPDATE",
+          [termId],
+        );
+        if (!period) {
+          if (
+            !term.start_date ||
+            !term.end_date ||
+            new Date(term.end_date) <= new Date(term.start_date)
+          )
+            throw new BadRequestException(
+              "Học kỳ cần ngày bắt đầu và kết thúc hợp lệ.",
+            );
+          const result = await m.query(
+            "INSERT INTO registration_periods(academic_term_id,period_code,period_name,open_at,close_at,status,created_by) VALUES(?,?,?,?,?,'CLOSED',?)",
+            [
+              termId,
+              "GRADE_TERM_" + termId,
+              "Danh sách học và điểm học kỳ",
+              term.start_date,
+              term.end_date,
+              a.id,
+            ],
+          );
+          period = { id: String(result.insertId) };
+        }
+        const result = await m.query(
+          "INSERT INTO course_offerings(registration_period_id,course_version_id,class_code,capacity,status,created_by) VALUES(?,?,?,?,'OPEN',?)",
+          [
+            period.id,
+            courseVersionId,
+            code,
+            Math.max(30, data.members.length),
+            a.id,
+          ],
+        );
+        offeringId = String(result.insertId);
+        await m.query(
+          "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?)",
+          [
+            a.id,
+            a.username,
+            "CREATE",
+            "course_offering",
+            offeringId,
+            JSON.stringify({ classId, termId, courseVersionId }),
+            "Tự chuẩn bị liên kết môn khi cán bộ tải mẫu điểm",
+            a.ip || null,
+          ],
+        );
+      }
+      const [selectedOffering] = await m.query(
+        "SELECT class_code,capacity FROM course_offerings WHERE id=? FOR UPDATE",
+        [offeringId],
+      );
+      if (
+        selectedOffering?.class_code === code &&
+        Number(selectedOffering.capacity) < data.members.length
+      ) {
+        await m.query("UPDATE course_offerings SET capacity=? WHERE id=?", [
+          data.members.length,
+          offeringId,
+        ]);
+        await m.query(
+          "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,old_value,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?,?)",
+          [
+            a.id,
+            a.username,
+            "UPDATE",
+            "course_offering",
+            offeringId,
+            JSON.stringify({ capacity: Number(selectedOffering.capacity) }),
+            JSON.stringify({ capacity: data.members.length }),
+            "Đồng bộ sĩ số bảng điểm theo lớp quản lý",
+            a.ip || null,
+          ],
+        );
+      }
+      const roster = await this.prepareRegistrations(
+        classId,
+        termId,
+        data.members.map((member) => ({
+          studentCode: member.studentCode,
+          offeringId,
+          note: "Tự lập danh sách từ lớp quản lý khi tải mẫu điểm",
+          reference: `GRADE-${classId}-${termId}`,
+        })),
+        a,
+        true,
+        m,
+      );
+      return { offeringId, added: roster.changed };
+    });
+  }
+  async completeSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    reason: { note: string; reference: string },
+    a: GradeActor,
+  ) {
+    if (!a.canManage)
+      throw new ForbiddenException(
+        "Chỉ cán bộ đào tạo được xác nhận hoàn tất môn.",
+      );
+    if (
+      !reason.note ||
+      reason.note.trim().length < 10 ||
+      reason.note.length > 1000 ||
+      !reason.reference?.trim() ||
+      reason.reference.length > 255
+    )
+      throw new BadRequestException(
+        "Điền lý do tối thiểu 10 ký tự và số hồ sơ hợp lệ.",
+      );
+    return this.write(a, async (m) => {
+      const courses = await this.sheetCourses(classId, termId, a, m);
+      if (!courses.some((c) => c.courseVersionId === courseVersionId))
+        throw new ForbiddenException("Môn không thuộc CTĐT của lớp.");
+      const rows = (await this.excelRows(classId, termId, a, m)).filter(
+        (r) => r.courseVersionId === courseVersionId,
+      );
+      const ids = [...new Set<string>(rows.map((r) => r.offeringId))];
+      if (ids.length !== 1)
+        throw new ConflictException(
+          "Chưa có bảng điểm hoặc môn có nhiều lớp giảng dạy; cần kiểm tra dữ liệu.",
+        );
+      const [offering] = await m.query(
+        "SELECT co.status,rp.status periodStatus FROM course_offerings co JOIN registration_periods rp ON rp.id=co.registration_period_id WHERE co.id=? FOR UPDATE",
+        [ids[0]],
+      );
+      if (
+        !offering ||
+        !OPEN_CLASSES.includes(offering.status) ||
+        !["OPEN", "CLOSED"].includes(offering.periodStatus)
+      )
+        throw new ConflictException("Môn/học kỳ đã khóa hoặc hủy.");
+      if (offering.status === "COMPLETED") return { completed: true };
+      await m.query(
+        "UPDATE course_offerings SET status='COMPLETED' WHERE id=?",
+        [ids[0]],
+      );
+      await m.query(
+        "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,old_value,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?,?)",
+        [
+          a.id,
+          a.username,
+          "UPDATE",
+          "course_offering",
+          ids[0],
+          JSON.stringify({ status: offering.status }),
+          JSON.stringify({ status: "COMPLETED" }),
+          reason.note.slice(0, 700) + " [" + reason.reference + "]",
+          a.ip || null,
+        ],
+      );
+      return { completed: true };
+    });
+  }
   async preparation(
     classId: string,
     termId: string,
@@ -128,7 +388,7 @@ export class MysqlGradeRepository extends GradeRepository {
     );
     const offerings = await m.query(
       `SELECT DISTINCT CAST(co.id AS CHAR) offeringId,co.class_code offeringCode,
-      c.course_code courseCode,cv.course_name courseName,co.capacity,co.status,
+      CAST(cv.id AS CHAR) courseVersionId,c.course_code courseCode,cv.course_name courseName,co.capacity,co.status,
       (SELECT COUNT(*) FROM course_registrations cr WHERE cr.course_offering_id=co.id AND cr.status='REGISTERED') enrolled,
       CAST(gp.id AS CHAR) policyId
       FROM course_offerings co JOIN registration_periods rp ON rp.id=co.registration_period_id
@@ -166,127 +426,135 @@ export class MysqlGradeRepository extends GradeRepository {
     }[],
     a: GradeActor,
     apply: boolean,
+    manager?: EntityManager,
   ) {
     if (!a.canPrepare)
       throw new ForbiddenException(
         "Cần quyền REGISTRATION_MANAGE của cán bộ đào tạo để lập danh sách học.",
       );
-    return this.write(a, async (m) => {
-      const [permission] = await m.query(
-        `SELECT 1 allowed FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND r.status='ACTIVE' AND p.permission_code='REGISTRATION_MANAGE' LIMIT 1`,
-        [a.id],
-      );
-      if (!permission)
-        throw new ForbiddenException("Quyền lập danh sách học đã bị thu hồi.");
-      const initial = await this.preparation(classId, termId, a, m);
-      await m.query("SELECT id FROM student_classes WHERE id=? FOR UPDATE", [
-        classId,
-      ]);
-      if (initial.context.status !== "ACTIVE")
-        throw new ConflictException("Lớp đã ngừng hoạt động.");
-      // Use the same student-before-offering lock order as grade operations.
-      for (const member of [...initial.members].sort((x, y) =>
-        BigInt(x.studentId) < BigInt(y.studentId) ? -1 : 1,
-      ))
-        await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
-          member.studentId,
-        ]);
-      for (const offering of [...initial.offerings].sort((x, y) =>
-        BigInt(x.offeringId) < BigInt(y.offeringId) ? -1 : 1,
-      ))
-        await m.query("SELECT id FROM course_offerings WHERE id=? FOR UPDATE", [
-          offering.offeringId,
-        ]);
-      const data = await this.preparation(classId, termId, a, m),
-        changes = [],
-        seen = new Set<string>(),
-        counts = new Map<string, number>();
-      let unchanged = 0;
-      if (data.context.status !== "ACTIVE")
-        throw new ConflictException("Lớp đã ngừng hoạt động.");
-      for (const row of rows) {
-        const member = data.members.find(
-          (s) => s.studentCode === row.studentCode,
+    return this.write(
+      a,
+      async (m) => {
+        const [permission] = await m.query(
+          `SELECT 1 allowed FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND r.status='ACTIVE' AND p.permission_code='REGISTRATION_MANAGE' LIMIT 1`,
+          [a.id],
         );
-        const offering = data.offerings.find(
-          (o) => o.offeringId === row.offeringId,
-        );
-        if (!member || !offering)
-          throw new BadRequestException(
-            `Học viên ${row.studentCode} hoặc lớp học phần không thuộc lớp, CTĐT, học kỳ và phạm vi được cấp.`,
+        if (!permission)
+          throw new ForbiddenException(
+            "Quyền lập danh sách học đã bị thu hồi.",
           );
-        const key = member.studentId + ":" + offering.offeringId;
-        if (seen.has(key))
-          throw new BadRequestException(
-            "Học viên/lớp học phần bị lặp trong file.",
+        const initial = await this.preparation(classId, termId, a, m);
+        await m.query("SELECT id FROM student_classes WHERE id=? FOR UPDATE", [
+          classId,
+        ]);
+        if (initial.context.status !== "ACTIVE")
+          throw new ConflictException("Lớp đã ngừng hoạt động.");
+        // Use the same student-before-offering lock order as grade operations.
+        for (const member of [...initial.members].sort((x, y) =>
+          BigInt(x.studentId) < BigInt(y.studentId) ? -1 : 1,
+        ))
+          await m.query("SELECT id FROM students WHERE id=? FOR UPDATE", [
+            member.studentId,
+          ]);
+        for (const offering of [...initial.offerings].sort((x, y) =>
+          BigInt(x.offeringId) < BigInt(y.offeringId) ? -1 : 1,
+        ))
+          await m.query(
+            "SELECT id FROM course_offerings WHERE id=? FOR UPDATE",
+            [offering.offeringId],
           );
-        seen.add(key);
-        const existing = data.registrations.find(
-          (r) =>
-            r.studentCode === row.studentCode &&
-            r.offeringId === row.offeringId,
-        );
-        if (existing) {
-          if (existing.status !== "REGISTERED")
-            throw new ConflictException(
-              "Đăng ký đã hủy/rút; không tự mở lại từ file lập danh sách.",
+        const data = await this.preparation(classId, termId, a, m),
+          changes = [],
+          seen = new Set<string>(),
+          counts = new Map<string, number>();
+        let unchanged = 0;
+        if (data.context.status !== "ACTIVE")
+          throw new ConflictException("Lớp đã ngừng hoạt động.");
+        for (const row of rows) {
+          const member = data.members.find(
+            (s) => s.studentCode === row.studentCode,
+          );
+          const offering = data.offerings.find(
+            (o) => o.offeringId === row.offeringId,
+          );
+          if (!member || !offering)
+            throw new BadRequestException(
+              `Học viên ${row.studentCode} hoặc lớp học phần không thuộc lớp, CTĐT, học kỳ và phạm vi được cấp.`,
             );
-          unchanged++;
-          continue;
+          const key = member.studentId + ":" + offering.offeringId;
+          if (seen.has(key))
+            throw new BadRequestException(
+              "Học viên/lớp học phần bị lặp trong file.",
+            );
+          seen.add(key);
+          const existing = data.registrations.find(
+            (r) =>
+              r.studentCode === row.studentCode &&
+              r.offeringId === row.offeringId,
+          );
+          if (existing) {
+            if (existing.status !== "REGISTERED")
+              throw new ConflictException(
+                "Đăng ký đã hủy/rút; không tự mở lại từ file lập danh sách.",
+              );
+            unchanged++;
+            continue;
+          }
+          if (
+            row.note.trim().length < 10 ||
+            row.note.length > 700 ||
+            !row.reference.trim() ||
+            row.reference.length > 255
+          )
+            throw new BadRequestException(
+              "Dòng đăng ký mới cần lý do 10–700 ký tự và số hồ sơ tối đa 255 ký tự.",
+            );
+          const count = (counts.get(offering.offeringId) || 0) + 1;
+          counts.set(offering.offeringId, count);
+          if (Number(offering.enrolled) + count > Number(offering.capacity))
+            throw new ConflictException(
+              `Lớp học phần ${offering.offeringCode} không đủ chỗ.`,
+            );
+          changes.push({
+            ...row,
+            studentId: member.studentId,
+            studentName: member.studentName,
+            offeringCode: offering.offeringCode,
+            courseCode: offering.courseCode,
+          });
         }
-        if (
-          row.note.trim().length < 10 ||
-          row.note.length > 700 ||
-          !row.reference.trim() ||
-          row.reference.length > 255
-        )
-          throw new BadRequestException(
-            "Dòng đăng ký mới cần lý do 10–700 ký tự và số hồ sơ tối đa 255 ký tự.",
-          );
-        const count = (counts.get(offering.offeringId) || 0) + 1;
-        counts.set(offering.offeringId, count);
-        if (Number(offering.enrolled) + count > Number(offering.capacity))
-          throw new ConflictException(
-            `Lớp học phần ${offering.offeringCode} không đủ chỗ.`,
-          );
-        changes.push({
-          ...row,
-          studentId: member.studentId,
-          studentName: member.studentName,
-          offeringCode: offering.offeringCode,
-          courseCode: offering.courseCode,
-        });
-      }
-      if (apply)
-        for (const row of changes) {
-          await m.query(
-            "INSERT INTO course_registrations(student_id,course_offering_id,registered_by,note) VALUES(?,?,?,?)",
-            [
-              row.studentId,
-              row.offeringId,
-              a.id,
-              `${row.note} [${row.reference}]`,
-            ],
-          );
-          const [{ id }] = await m.query(
-            "SELECT CAST(LAST_INSERT_ID() AS CHAR) id",
-          );
-          await m.query(
-            "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?)",
-            [
-              a.id,
-              a.username,
-              "REGISTRATION_PREPARE",
-              "course_registration",
-              id,
-              JSON.stringify(row),
-              `${row.note} [${row.reference}]`,
-              a.ip || null,
-            ],
-          );
-        }
-      return { changes, changed: changes.length, unchanged, applied: apply };
-    });
+        if (apply)
+          for (const row of changes) {
+            await m.query(
+              "INSERT INTO course_registrations(student_id,course_offering_id,registered_by,note) VALUES(?,?,?,?)",
+              [
+                row.studentId,
+                row.offeringId,
+                a.id,
+                `${row.note} [${row.reference}]`,
+              ],
+            );
+            const [{ id }] = await m.query(
+              "SELECT CAST(LAST_INSERT_ID() AS CHAR) id",
+            );
+            await m.query(
+              "INSERT INTO audit_logs(actor_id,actor_username,action,entity_type,entity_id,new_value,reason,ip_address) VALUES(?,?,?,?,?,?,?,?)",
+              [
+                a.id,
+                a.username,
+                "REGISTRATION_PREPARE",
+                "course_registration",
+                id,
+                JSON.stringify(row),
+                `${row.note} [${row.reference}]`,
+                a.ip || null,
+              ],
+            );
+          }
+        return { changes, changed: changes.length, unchanged, applied: apply };
+      },
+      manager,
+    );
   }
   async excelRows(
     classId: string,
@@ -299,7 +567,7 @@ export class MysqlGradeRepository extends GradeRepository {
       await m.query(
         `SELECT CAST(cr.id AS CHAR) registrationId,CAST(s.id AS CHAR) studentId,
       s.student_code studentCode,s.full_name studentName,CAST(co.id AS CHAR) offeringId,co.class_code offeringCode,
-      co.status classStatus,cr.status registrationStatus,c.course_code courseCode,cv.course_name courseName,
+      co.status classStatus,cr.status registrationStatus,CAST(cv.id AS CHAR) courseVersionId,c.course_code courseCode,cv.course_name courseName,
       CAST(r.id AS CHAR) resultId,r.revision,COALESCE(d.state,IF(r.id IS NULL,'NEW','LEGACY')) state,
       d.attendance_score attendanceScore,d.midterm_score midtermScore,d.exam_score examScore,d.total_score totalScore,
       r.grade,r.result_status resultStatus,CAST(gp.id AS CHAR) policyId,gp.revision policyRevision

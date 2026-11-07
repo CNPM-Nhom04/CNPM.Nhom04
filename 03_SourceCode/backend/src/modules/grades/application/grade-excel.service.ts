@@ -52,12 +52,61 @@ export class GradeExcelService {
     this.context(classId, termId, a);
     return this.repository.excelRows(classId, termId, a);
   }
-  async template(classId: string, termId: string, a: GradeActor) {
-    const context = this.context(classId, termId, a);
-    const rows = await this.repository.excelRows(classId, termId, a);
+  sheetCourses(classId: string, termId: string, a: GradeActor) {
+    this.context(classId, termId, a);
+    return this.repository.sheetCourses(classId, termId, a);
+  }
+  openSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    a: GradeActor,
+  ) {
+    this.context(classId, termId, a);
+    return this.repository.openSheet(classId, termId, courseVersionId, a);
+  }
+  completeSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    reason: { note: string; reference: string },
+    a: GradeActor,
+  ) {
+    this.context(classId, termId, a);
+    return this.repository.completeSheet(
+      classId,
+      termId,
+      courseVersionId,
+      reason,
+      a,
+    );
+  }
+  private courseContext(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    courseVersionId?: string,
+  ) {
+    if (courseVersionId && !/^[1-9]\d{0,19}$/.test(courseVersionId))
+      throw new BadRequestException("Chọn môn học hợp lệ.");
+    return (
+      this.context(classId, termId, a) +
+      (courseVersionId ? ":course:" + courseVersionId : "")
+    );
+  }
+  async template(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+    courseVersionId?: string,
+  ) {
+    const context = this.courseContext(classId, termId, a, courseVersionId);
+    const rows = (await this.repository.excelRows(classId, termId, a)).filter(
+      (row) => !courseVersionId || row.courseVersionId === courseVersionId,
+    );
     if (!rows.length)
       throw new BadRequestException(
-        "Lớp chưa có danh sách học trong học kỳ này. Lập danh sách học bằng Excel ở bước 1 trước khi tải mẫu điểm.",
+        "Chưa có học viên cho môn trong học kỳ này. Bấm tải mẫu để hệ thống chuẩn bị bảng điểm.",
       );
     if (rows.length > 5000)
       throw new BadRequestException("Tối đa 5000 dòng mỗi file.");
@@ -163,8 +212,9 @@ export class GradeExcelService {
     file: { buffer: Buffer; size: number; originalname: string } | undefined,
     a: GradeActor,
     apply: boolean,
+    courseVersionId?: string,
   ) {
-    const context = this.context(classId, termId, a);
+    const context = this.courseContext(classId, termId, a, courseVersionId);
     if (
       !file?.buffer?.length ||
       file.size > 5 * 1024 * 1024 ||

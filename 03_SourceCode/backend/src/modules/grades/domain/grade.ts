@@ -43,6 +43,24 @@ export interface LegacyWrite {
   reference: string;
 }
 export abstract class GradeRepository {
+  abstract sheetCourses(
+    classId: string,
+    termId: string,
+    a: GradeActor,
+  ): Promise<any[]>;
+  abstract openSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    a: GradeActor,
+  ): Promise<any>;
+  abstract completeSheet(
+    classId: string,
+    termId: string,
+    courseVersionId: string,
+    reason: { note: string; reference: string },
+    a: GradeActor,
+  ): Promise<any>;
   abstract preparation(
     classId: string,
     termId: string,

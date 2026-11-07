@@ -50,6 +50,7 @@ export function ProgramList({
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState(initialStatus),
     [level, setLevel] = useState("ALL"),
+    [catalog, setCatalog] = useState<"MANAGED" | "PUBLIC">("MANAGED"),
     [page, setPage] = useState(1),
     [mode, setMode] = useState<"versions" | "unversioned">("versions");
   const [result, setResult] = useState<Result | null>(null),
@@ -79,6 +80,7 @@ export function ProgramList({
             searchTerm: search.trim(),
             selectedStatus: status,
             selectedLevel: level,
+            selectedCatalog: catalog,
             page: String(page),
             limit: "20",
           }),
@@ -90,6 +92,7 @@ export function ProgramList({
           setError(null);
           if (data.unversionedCount != null)
             setUnversionedCount(data.unversionedCount);
+          else if (mode === "unversioned") setUnversionedCount(data.meta.total);
         })
         .catch((reason: unknown) => {
           if (!controller.signal.aborted) {
@@ -109,7 +112,7 @@ export function ProgramList({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, status, level, page, mode, version]);
+  }, [search, status, level, catalog, page, mode, version]);
   return (
     <div className="space-y-6">
       <ProgramFeedback error={error} retry={refresh} />
@@ -147,9 +150,10 @@ export function ProgramList({
         </Button>
       </div>
       <p className="text-sm text-slate-500">
-        Danh mục AGU công khai dùng để tra cứu; dữ liệu nội bộ theo phạm vi tài
-        khoản. Một CTĐT có thể có nhiều phiên bản, mỗi phiên bản là một dòng
-        riêng.
+        {catalog === "MANAGED"
+          ? "Đang xem CTĐT thuộc phạm vi được cấp cho tài khoản. Chọn nguồn công khai để tra cứu thêm chương trình AGU ngoài phạm vi."
+          : "Đang xem CTĐT nguồn công khai AGU để tham khảo. Quyền tạo phiên bản nội bộ vẫn theo phạm vi tài khoản."}{" "}
+        Mỗi phiên bản CTĐT là một dòng riêng.
       </p>
       <div className="bg-white p-4 rounded-lg border flex flex-col md:flex-row gap-4 justify-between">
         <Input
@@ -160,6 +164,21 @@ export function ProgramList({
           onChange={(event) => {
             setSearch(event.target.value);
             setPage(1);
+            setLoading(true);
+          }}
+        />
+        <Select
+          aria-label="Nguồn danh sách CTĐT"
+          options={[
+            { label: "CTĐT thuộc phạm vi tài khoản", value: "MANAGED" },
+            { label: "CTĐT công khai tham khảo (AGU)", value: "PUBLIC" },
+          ]}
+          value={catalog}
+          onChange={(event) => {
+            setCatalog(event.target.value as "MANAGED" | "PUBLIC");
+            setPage(1);
+            setStatus("ALL");
+            setUnversionedCount(null);
             setLoading(true);
           }}
         />
@@ -177,7 +196,7 @@ export function ProgramList({
             setLoading(true);
           }}
         />
-        {mode === "versions" && (
+        {mode === "versions" && catalog === "MANAGED" && (
           <Select
             aria-label="Trạng thái CTĐT"
             options={[
@@ -368,7 +387,9 @@ export function ProgramList({
                       ? "Không thể tải dữ liệu."
                       : mode === "unversioned"
                         ? "Không có CTĐT chưa lập phiên bản trong phạm vi tài khoản."
-                        : "Không tìm thấy phiên bản CTĐT phù hợp."}
+                        : catalog === "MANAGED"
+                          ? "Chưa có phiên bản CTĐT phù hợp trong phạm vi tài khoản. Bạn có thể chọn nguồn công khai AGU để tham khảo."
+                          : "Không tìm thấy phiên bản CTĐT công khai phù hợp."}
                 </td>
               </tr>
             )}

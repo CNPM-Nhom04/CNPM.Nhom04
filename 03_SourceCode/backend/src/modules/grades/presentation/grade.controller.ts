@@ -20,6 +20,8 @@ import { JwtAuthGuard } from "../../identity/presentation/jwt-auth.guard";
 import { GradeService } from "../application/grade.service";
 import {
   CreateGradeDto,
+  GradeSheetDto,
+  CompleteGradeSheetDto,
   GradeActionDto,
   GradePolicyDto,
   GradeQueryDto,
@@ -38,6 +40,35 @@ export class GradeController {
     private readonly excel: GradeExcelService,
     private readonly roster: GradeRosterService,
   ) {}
+  @Get("excel/mon-hoc")
+  sheetCourses(
+    @Query("classId") classId: string,
+    @Query("termId") termId: string,
+    @Req() r: GradeRequest,
+  ) {
+    return this.excel.sheetCourses(classId, termId, r.gradeActor);
+  }
+  @Post("excel/mo-bang-diem")
+  @GradePermission()
+  openSheet(@Body() b: GradeSheetDto, @Req() r: GradeRequest) {
+    return this.excel.openSheet(
+      b.classId,
+      b.termId,
+      b.courseVersionId,
+      r.gradeActor,
+    );
+  }
+  @Post("excel/hoan-tat-mon")
+  @GradePermission()
+  completeSheet(@Body() b: CompleteGradeSheetDto, @Req() r: GradeRequest) {
+    return this.excel.completeSheet(
+      b.classId,
+      b.termId,
+      b.courseVersionId,
+      b,
+      r.gradeActor,
+    );
+  }
   @Get("excel/chuan-bi")
   @GradePermission()
   preparation(
@@ -111,12 +142,13 @@ export class GradeController {
   @Get("excel/mau")
   @GradePermission()
   async excelTemplate(
+    @Query("courseVersionId") courseVersionId: string,
     @Query("classId") classId: string,
     @Query("termId") termId: string,
     @Req() r: GradeRequest,
   ) {
     return new StreamableFile(
-      await this.excel.template(classId, termId, r.gradeActor),
+      await this.excel.template(classId, termId, r.gradeActor, courseVersionId),
       { type: XLSX_MIME, disposition: 'attachment; filename="Bang_diem.xlsx"' },
     );
   }
@@ -128,12 +160,20 @@ export class GradeController {
     }),
   )
   excelPreview(
+    @Query("courseVersionId") courseVersionId: string,
     @Query("classId") classId: string,
     @Query("termId") termId: string,
     @UploadedFile() file: any,
     @Req() r: GradeRequest,
   ) {
-    return this.excel.import(classId, termId, file, r.gradeActor, false);
+    return this.excel.import(
+      classId,
+      termId,
+      file,
+      r.gradeActor,
+      false,
+      courseVersionId,
+    );
   }
   @Post("excel/luu")
   @GradePermission()
@@ -143,12 +183,20 @@ export class GradeController {
     }),
   )
   excelSave(
+    @Query("courseVersionId") courseVersionId: string,
     @Query("classId") classId: string,
     @Query("termId") termId: string,
     @UploadedFile() file: any,
     @Req() r: GradeRequest,
   ) {
-    return this.excel.import(classId, termId, file, r.gradeActor, true);
+    return this.excel.import(
+      classId,
+      termId,
+      file,
+      r.gradeActor,
+      true,
+      courseVersionId,
+    );
   }
   @Get()
   @ApiOperation({
