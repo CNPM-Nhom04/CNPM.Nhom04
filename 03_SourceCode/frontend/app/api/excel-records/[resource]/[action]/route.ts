@@ -1,3 +1,4 @@
+import { hasTrustedOrigin } from "@/lib/server/requestOrigin";
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl } from "@/lib/server/backend";
 const resources = new Set([
@@ -35,7 +36,7 @@ async function handle(
     );
   if (
     request.method === "POST" &&
-    request.headers.get("origin") !== request.nextUrl.origin
+    !hasTrustedOrigin(request)
   )
     return NextResponse.json(
       { message: "Yêu cầu không hợp lệ." },

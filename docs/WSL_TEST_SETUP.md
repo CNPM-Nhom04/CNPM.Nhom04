@@ -6,11 +6,9 @@ Quy trình dành cho Windows + Ubuntu/WSL, phù hợp backend đang chạy tại
 
 Cần gửi riêng `ctdt-ban-giao.sql`, tài khoản/mật khẩu website hiện tại và storage nếu có tài liệu. Không push dump hoặc .env thật. Chốt code commit đã push/merge bằng `git rev-parse --short HEAD`; working tree sạch trước khi bàn giao.
 
-Đã phục hồi thử file `D:\Download\ctdt-ban-giao.sql` trên MariaDB 11.8.6 vào database tạm ngày 02/11/2026, sau đó xóa database tạm. Kết quả: 63 bảng, 13 view, 58 trigger, 8 migrations, view học viên truy vấn được. File KHÔNG có CREATE DATABASE/USE, vì vậy phải tạo database trước và chỉ rõ database khi import. File không có DEFINER tường minh, có chỉ thị sandbox của MariaDB nên dùng client MariaDB mới cùng dòng 11.8.
+Bản SQL phải được xuất mới từ database đang dùng, đủ cấu trúc/dữ liệu/views/triggers/routines và bảng migrations. Các thống kê 63 bảng/8 migration và dữ liệu MIT trong hướng dẫn cũ thuộc snapshot trước AGU, không dùng để xác nhận bản bàn giao hiện tại. Commit này có 17 migrations. Bộ QA hiện tại gồm phiên bản CNTT-2025-2027-NB01, lớp CNTT26-NC và học viên QA_HV26_001/002 nếu dump được xuất sau bài test; mật khẩu website gửi riêng.
 
-Tài khoản có trong file và đã đối chiếu nguồn: `test.ctdt.01` để test cán bộ; người thực hiện RETURN/APPROVE trên bản thử là `thuan`. `test.duyet.01` là tên đề xuất trong hướng dẫn cũ, KHÔNG có trong snapshot đã kiểm tra. `admin` và `approver.fit` có trên nguồn, chọn tài khoản hợp lệ thực sự có trong bộ bàn giao; mật khẩu phải do người bàn giao gửi riêng. Không tự suy ra mật khẩu từ mã nguồn hoặc hash.
-
-Bản `TEST-MIT-2026-v1` đã PUBLISHED. Nếu cần snapshot sau thời điểm này, xuất lại; file cũ không tự cập nhật.
+Nếu dump không có CREATE DATABASE/USE, tạo database đích trước khi import như dưới. Nếu có, kiểm tra tên đích cẩn thận. Dùng native client MariaDB cùng dòng với dump và không bỏ qua lỗi restore. Clone code không tự chuyển dữ liệu.
 
 ## 1. WSL/Ubuntu
 
@@ -130,10 +128,10 @@ Nếu đường dẫn có dấu cách phải bọc trong nháy kép. Lệnh impo
 Kiểm tra:
 
 ```bash
-sudo mariadb ctdt_management -e "SHOW TABLES; SELECT COUNT(*) AS migrations FROM migrations; SELECT version_code,status FROM program_versions WHERE version_code='TEST-MIT-2026-v1';"
+sudo mariadb ctdt_management -e "SHOW TABLES; SELECT COUNT(*) AS migrations FROM migrations; SELECT version_code,status FROM program_versions WHERE version_code='CNTT-2025-2027-NB01';"
 ```
 
-Cần thấy 8 migrations và bản thử PUBLISHED với snapshot đã kiểm tra. Quyền/tài khoản MariaDB không đi theo dump business database.
+Đối chiếu 17 migrations ở commit hiện tại và bản nội bộ PUBLISHED nếu có trong snapshot bàn giao. Quyền/tài khoản MariaDB không đi theo dump business database.
 
 ## 6. Tạo user cho ứng dụng (không dùng root trong backend)
 
@@ -246,12 +244,12 @@ Các bảng để kiểm tra: users (tài khoản test), program_versions (bản
 ## 10. File upload, SMTP và bài kiểm tra cuối
 
 - Nếu có tài liệu: copy storage vào backend/storage hoặc cấu hình PROGRAM_UPLOAD_DIR đúng. DB chỉ lưu metadata nên import SQL không khôi phục nội dung tệp.
-- Đăng nhập http://localhost:3000/dang-nhap, user `test.ctdt.01`, mật khẩu hiện tại từ người bàn giao.
-- Không vào được Admin, chỉ thấy CTĐT trong scope; bản `TEST-MIT-2026-v1` PUBLISHED, không sửa được, NC 14 môn/nhóm 9-24-12-15, UD 17 môn/nhóm 9-36-6-9.
-- Người duyệt thực tế của bài test là `thuan`; dùng đúng tài khoản đã bàn giao để xem RETURNED và APPROVED. Không tự đổi scope/role để demo, chỉ đối chiếu quyền SQL hiện tại.
+- Đăng nhập http://localhost:3000/dang-nhap, dùng tài khoản/mật khẩu hiện tại được bàn giao riêng, ví dụ officer.fit và approver.fit.
+- Cán bộ chỉ thao tác đúng scope; phiên bản nội bộ NB01 đã PUBLISHED, hướng nghiên cứu 16 môn và nhóm 3/15/27/15. Nguồn AGU luôn chỉ đọc.
+- Đối chiếu người thực hiện trong lịch sử; tài khoản lãnh đạo AGU của bộ QA là approver.fit. Không tự đổi scope/role để demo.
 - Export báo cáo Excel phải mở được. Tài liệu chỉ tải được nếu đã chuyển file storage.
 - SMTP chỉ cần cho email: cấu hình riêng backend/.env, chạy npm run check:smtp. example.com không nhận mail. Không cần SMTP để đăng nhập/xem CTĐT.
-- Hai trang dang-ky-hoc-phan và sinh-vien/dang-ky còn dữ liệu mẫu, chưa phải luồng API hoàn thành.
+- Không có học viên tự đăng ký học phần; quản lý điểm dùng luồng đơn vị → lớp → học kỳ → môn → Excel.
 
 ## 11. Mỗi lần test sau
 

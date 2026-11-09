@@ -34,3 +34,16 @@
 Xem [hướng dẫn cài đặt và bàn giao dữ liệu](docs/LOCAL_TEST_SETUP.md) để chuẩn bị MariaDB, phục hồi database, cấu hình env, cài thư viện và chạy NestJS/Next.js. Chỉ clone Git không chuyển dữ liệu vừa test hoặc file upload.
 
 Nếu backend chạy trong Ubuntu/WSL, dùng [quy trình WSL từ cài đặt đến chạy test](docs/WSL_TEST_SETUP.md). Hướng dẫn tạo database và user ứng dụng riêng để tránh lỗi root/Unknown database.
+
+## 5. Bố cục và kiểm chứng bàn giao
+
+| Nhóm | Nội dung |
+|---|---|
+| [01_Requirements](01_Requirements/README.md) | Phạm vi và yêu cầu chức năng hiện có |
+| [02_Design](02_Design/README.md) | Kiến trúc, quyền và liên kết dữ liệu |
+| [03_SourceCode](03_SourceCode) | Backend NestJS, frontend Next.js và tài liệu module |
+| [04_Infrastructure](04_Infrastructure/docker/README.md) | Docker dev/staging/production |
+| [05_Testing](05_Testing/README.md) | Test, coverage, audit và hồi quy QA |
+| [06_Documentation](06_Documentation/README.md) | Chỉ mục cài đặt và bàn giao |
+
+Các tài liệu cũ trong `docs/` và dữ liệu nguồn AGU trong `artifacts/` giữ đường dẫn hiện có. CI bao gồm frontend tests, backend coverage, audit Critical/High và HTTP integration trên MariaDB riêng. Không dùng database đào tạo thật để chạy bộ test ghi dữ liệu.

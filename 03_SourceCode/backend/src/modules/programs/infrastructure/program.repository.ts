@@ -22,11 +22,12 @@ import {
 } from "../domain/program";
 import { validateCurriculum } from "../domain/validate-curriculum";
 
-const SCOPE = `p.deleted_at IS NULL AND EXISTS (SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
+const ACCESS_SCOPE = `EXISTS (SELECT 1 FROM user_scopes us WHERE us.user_id=? AND (
  us.scope_type='GLOBAL' OR (us.scope_type='PROGRAM' AND us.program_id=p.id)
  OR (us.scope_type='MAJOR' AND us.major_id=p.major_id)
  OR (us.scope_type='ORG_UNIT' AND EXISTS (SELECT 1 FROM organizational_unit_closure oc
    WHERE oc.ancestor_id=us.organizational_unit_id AND oc.descendant_id=p.managing_unit_id))))`;
+const SCOPE = `p.deleted_at IS NULL AND ${ACCESS_SCOPE}`;
 const READ_SCOPE = `p.deleted_at IS NULL AND (${SCOPE} OR cs.program_id IS NOT NULL)`;
 const READ_VERSION_SCOPE = `p.deleted_at IS NULL AND (${SCOPE} OR src.program_version_id IS NOT NULL)`;
 const LEVEL_FILTER =
@@ -756,7 +757,7 @@ export class MysqlProgramRepository extends ProgramRepository {
         programId = existingProgramId;
       } else {
         const [scope] = await manager.query(
-          `SELECT 1 AS allowed FROM (SELECT 0 AS id,? AS major_id,? AS managing_unit_id) p WHERE ${SCOPE}`,
+          `SELECT 1 AS allowed FROM (SELECT 0 AS id,? AS major_id,? AS managing_unit_id) p WHERE ${ACCESS_SCOPE}`,
           [input.majorId, input.managingUnitId, actor.id],
         );
         if (!scope)

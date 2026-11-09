@@ -1,6 +1,6 @@
 # Clone và chạy test trên máy khác
 
-Mục tiêu: chạy cùng code và cùng dữ liệu với máy bàn giao. Chỉ clone Git không chuyển database, mật khẩu local hay tệp upload. Hướng dẫn dùng MariaDB local, backend 3002, frontend 3000; chưa dùng Docker vì cấu hình Docker dev hiện chưa hoàn chỉnh.
+Mục tiêu: chạy cùng code và cùng dữ liệu với máy bàn giao. Chỉ clone Git không chuyển database, mật khẩu local hay tệp upload. Hướng dẫn dùng MariaDB local, backend 3002, frontend 3000; nếu dùng Docker, xem [cấu hình dev/staging/production](../04_Infrastructure/docker/README.md).
 
 > **Máy chạy backend trong Ubuntu/WSL:** làm theo [quy trình WSL thống nhất](WSL_TEST_SETUP.md), bao gồm tạo database, import bằng terminal và user TCP riêng. Đừng trộn bước Windows native bên dưới với WSL.
 
@@ -13,7 +13,7 @@ Mục tiêu: chạy cùng code và cùng dữ liệu với máy bàn giao. Chỉ
 - Nếu cần tải tài liệu đã upload: gửi kèm `03_SourceCode/backend/storage/`, giữ nguyên cấu trúc. Nếu máy bàn giao dùng `PROGRAM_UPLOAD_DIR` riêng, chuyển đúng dữ liệu của thư mục đó và cấu hình tương ứng trên máy nhận.
 - Gửi riêng tài khoản test và mật khẩu HIỆN TẠI sau lần đổi mật khẩu. Tài khoản MariaDB khác tài khoản đăng nhập website.
 
-Bản sao sau bài test CTĐT đã kiểm tra có `test.ctdt.01`, `thuan`, `TEST_MIT_01`, phiên bản `TEST-MIT-2026-v1` đã PUBLISHED. Chúng không tự có từ Git; chỉ có nếu nằm trong dump được bàn giao.
+Bộ dữ liệu QA hiện tại dùng danh mục AGU, phiên bản `CNTT-2025-2027-NB01`, lớp `CNTT26-NC`, học viên `QA_HV26_001` đủ 60/60 tín chỉ và `QA_HV26_002` chưa đủ điều kiện. Chúng chỉ có nếu dump được xuất sau bài test; clone code hoặc bootstrap database mới không tự tạo bộ dữ liệu này.
 
 ## 2. Công cụ trên máy nhận
 
@@ -43,7 +43,7 @@ git rev-parse --short HEAD
 3. Trong DBeaver nhấp phải database/kết nối phù hợp → Tools → Restore/Execute script, chọn dump được bàn giao. Dùng native client và kiểm tra log hoàn thành. Tên menu tùy driver; native restore xử lý DELIMITER cho trigger tốt hơn chạy từng câu bằng Ctrl+Enter.
 4. Dump có thể chứa CREATE DATABASE/USE và DEFINER của view/trigger. Kiểm tra tên database đích trước khi chạy; nếu lỗi DEFINER/quyền, nhờ người bàn giao xuất bản portable hoặc người quản trị restore với definer hợp lệ. Không bỏ qua lỗi rồi chạy app trên schema thiếu view/trigger.
 5. Refresh Tables và Views. Kiểm tra có `users`, `program_versions`, `migrations`, `vw_user_program_access`, `vw_user_student_access`, `vw_student_curriculum`.
-6. Trong `migrations` dự kiến có 8 migration sau bộ bài test hiện tại. Trong `users` có hai tài khoản thử, `program_versions` có bản thử PUBLISHED. Dữ liệu có thể thay đổi theo thời điểm dump.
+6. Ở commit hiện tại có 17 migrations; đối chiếu với source khi nhận commit mới. Có phiên bản nội bộ PUBLISHED và dữ liệu học viên QA nếu snapshot được xuất sau bài test AGU.
 7. Tạo tài khoản kết nối DB local cho ứng dụng hoặc dùng tài khoản local đã được cấp. Migration cần quyền DDL/view/trigger; runtime cần quyền dữ liệu phù hợp. Tài khoản/mật khẩu DB do máy nhận quản lý, không tự được tạo từ dump business database.
 
 KHÔNG chạy lại `backend/src/core/database/CSDL.sql` sau restore: file gốc có DROP DATABASE và hướng dẫn chạy theo khối. SQL gốc không chứa dữ liệu vừa test. Nếu không có dump, chỉ có thể khởi tạo dữ liệu gốc theo các khối trong file rồi chạy migration; dữ liệu và tài khoản sẽ không giống bản hiện tại.
@@ -145,11 +145,11 @@ Giữ hai terminal chạy, MariaDB cũng phải đang bật.
 1. Đăng nhập Admin bằng tài khoản và mật khẩu hiện tại được gửi riêng. JWT secret mới nên không dùng lại cookie cũ; dùng cửa sổ ẩn danh.
 2. Danh mục chung khớp 3 bảng `education_levels`, `organizational_units`, `knowledge_blocks`.
 3. Cấu hình khớp khóa `training.*` trong `system_settings`; thiếu khóa thì code hiện trả mặc định, không khẳng định mọi số đều đã có bản ghi SQL.
-4. `test.ctdt.01`: không vào được `/dashboard/admin/nguoi-dung`, chỉ thấy CTĐT trong phạm vi CNTT.
-5. Mở bản thử `TEST-MIT-2026-v1`: PUBLISHED; NC có 14 môn và nhóm 9/24/12/15; UD có 17 môn và nhóm 9/36/6/9. Không sửa được bản ban hành.
-6. `thuan`: xem lượt cũ RETURNED và lượt mới APPROVED của bản thử. Dữ liệu chỉ khớp nếu snapshot được xuất sau bước test này.
-7. Xuất báo cáo Excel, tải tài liệu nếu có.
-8. Hai trang đăng ký học phần hiện còn dữ liệu mẫu; không xem đó là lỗi restore hoặc khẳng định đã nối API.
+4. `officer.fit`: nhập/sửa theo phạm vi Trường Đại học An Giang; `approver.fit`: xét duyệt theo vai trò, không đồng nghĩa cả hai cùng được sửa/duyệt mọi thứ.
+5. Mở `CNTT-2025-2027-NB01` và lớp `CNTT26-NC`; học viên 001 đủ 60/60 nếu dump đã gồm bài test, học viên 002 không đủ điều kiện.
+6. Tài khoản Sư phạm chỉ thấy CTĐT trong phạm vi ở chế độ mặc định; nguồn công khai AGU nằm ở lựa chọn tham khảo riêng.
+7. Xuất báo cáo Excel, xem/in điểm bằng tài khoản giảng viên, tải tài liệu nếu có.
+8. Không có chức năng học viên tự đăng ký học phần; các liên kết môn/học kỳ chỉ phục vụ nhập điểm nội bộ.
 
 Mật khẩu app hiện tại không lấy ngược từ password_hash. Không tự đặt lại mật khẩu hàng loạt trên SQL. Nếu tài khoản cần đổi mật khẩu lần đầu thì làm trên giao diện.
 
@@ -187,4 +187,10 @@ Các script integration/browser có thể ghi SQL: không chạy tùy tiện tr�
 - Upload tải lỗi: kiểm tra file storage và PROGRAM_UPLOAD_DIR.
 - Hiện sai dữ liệu sau restore: Refresh DBeaver, kiểm tra filter, DATABASE_URL/.env.local, DB_* backend và đúng commit.
 
-.env, .env.local, node_modules, dist, .next và storage được bỏ qua có chủ đích. Code + lockfile + env mẫu + migrations cần commit; database và tài liệu thật chuyển riêng. Không dùng Dockerfile/Compose trống để chạy bộ test này.
+.env, .env.local, node_modules, dist, .next và storage được bỏ qua có chủ đích. Code + lockfile + env mẫu + migrations cần commit; database và tài liệu thật chuyển riêng. Cấu hình Docker mới ở `04_Infrastructure/docker/`; dùng đúng hướng dẫn và volume riêng.
+
+## Origin và môi trường reverse proxy
+
+Frontend có `APP_ORIGIN` là origin công khai người dùng truy cập (ví dụ `https://ctdt.example.edu`). Khi chạy sau proxy, đặt biến này trong môi trường frontend; backend vẫn dùng FRONTEND_URL cho link email. Có thể thêm TRUSTED_ORIGINS bằng danh sách origin chính xác, không wildcard. Không cần đặt cho chạy local trực tiếp; localhost và 127.0.0.1 cùng được kiểm tra với đúng host/port. Origin ngoài danh sách hoặc bị thiếu vẫn bị chặn 403.
+
+Database hoàn toàn mới có thể dùng `BOOTSTRAP_ADMIN_PASSWORD=<mật khẩu riêng>` rồi `npm run db:bootstrap` và `npm run migration:run`. Bootstrap từ chối database có bảng, không xóa/ghi đè bản bàn giao, không tạo dữ liệu MIT mẫu. Admin mới bắt buộc đổi mật khẩu lần đầu. Nếu đang restore dump đầy đủ, bỏ bước bootstrap.
