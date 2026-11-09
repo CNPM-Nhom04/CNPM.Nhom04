@@ -1,3 +1,4 @@
+import { hasTrustedOrigin } from "@/lib/server/requestOrigin";
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl, upstreamError } from "@/lib/server/backend";
 type Context = { params: Promise<{ action: string }> };
@@ -27,7 +28,7 @@ async function proxy(request: NextRequest, context: Context) {
     );
   if (
     expected === "POST" &&
-    request.headers.get("origin") !== request.nextUrl.origin
+    !hasTrustedOrigin(request)
   )
     return NextResponse.json(
       { message: "Yêu cầu không hợp lệ." },

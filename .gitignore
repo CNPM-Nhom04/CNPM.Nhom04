@@ -73,3 +73,15 @@ coverage/
 # Local QA inventory and test evidence
 /artifacts/testing/
 /03_SourceCode/frontend/public/mau-kiem-thu-ctdt/
+
+# Generated test output and deployment secrets
+**/test-results/
+.env.*
+!**/.env.example
+
+# Optional assistant skill bundles are not application dependencies
+/03_SourceCode/frontend/.agents/
+/03_SourceCode/frontend/.claude/
+/03_SourceCode/frontend/.windsurf/
+/03_SourceCode/frontend/skills-lock.json
+/03_SourceCode/frontend/CLAUDE.md

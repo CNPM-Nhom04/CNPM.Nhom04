@@ -1,8 +1,9 @@
+import { hasTrustedOrigin } from "@/lib/server/requestOrigin";
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, backendUrl, upstreamError } from "@/lib/server/backend";
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) {
+  if (!hasTrustedOrigin(request)) {
     return NextResponse.json(
       { message: "Yêu cầu không hợp lệ." },
       { status: 403 },
