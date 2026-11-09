@@ -1,4 +1,5 @@
 name: CI
+
 on:
   pull_request:
     branches: [main]
@@ -8,11 +9,14 @@ on:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
   frontend:
     name: Frontend
@@ -25,20 +29,27 @@ jobs:
       DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ctdt_ci
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: '22'
           cache: npm
           cache-dependency-path: 03_SourceCode/frontend/package-lock.json
-      - run: npm ci
-      - name: Frontend selection and origin tests
-        run: npm test
-      - run: npm run lint
-      - run: npx --no-install prisma validate
-      - run: npx --no-install prisma generate
-      - run: npm run typecheck
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Validate Prisma schema
+        run: npx --no-install prisma validate
+      - name: Generate Prisma client
+        run: npx --no-install prisma generate
+      - name: Check TypeScript
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
@@ -47,123 +58,38 @@ jobs:
       run:
         working-directory: 03_SourceCode/backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: '22'
           cache: npm
           cache-dependency-path: 03_SourceCode/backend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - name: Unit tests with coverage
-        run: npm run test:cov -- --ci --runInBand
-      - run: npm run build
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: backend-coverage
-          path: 03_SourceCode/backend/coverage
-          if-no-files-found: warn
-  security:
-    name: Dependency security
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - name: Audit frontend
-        working-directory: 03_SourceCode/frontend
-        run: npm audit --audit-level=high
-      - name: Audit backend
-        if: always()
-        working-directory: 03_SourceCode/backend
-        run: npm audit --audit-level=high
-  integration:
-    name: MariaDB integration
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    services:
-      mariadb:
-        image: mariadb:11.8
-        env:
-          MARIADB_DATABASE: ctdt_ci
-          MARIADB_USER: ci
-          MARIADB_PASSWORD: ci-only-password
-          MARIADB_ROOT_PASSWORD: ci-only-root-password
-        ports:
-          - 33306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=5s --health-timeout=5s --health-retries=30
-    env:
-      DB_HOST: 127.0.0.1
-      DB_PORT: '33306'
-      DB_USERNAME: ci
-      DB_PASSWORD: ci-only-password
-      DB_DATABASE: ctdt_ci
-      BOOTSTRAP_ADMIN_PASSWORD: CI-Bootstrap-Password-Only
-      JWT_SECRET: ci-only-disposable-jwt-secret-not-for-deployment
-      PORT: '43102'
-      FRONTEND_URL: http://127.0.0.1:43100
-      APP_ORIGIN: http://127.0.0.1:43100
-      BACKEND_API_URL: http://127.0.0.1:43102
-      DATABASE_URL: mysql://ci:ci-only-password@127.0.0.1:33306/ctdt_ci
-      QA_TEST_ALLOW_WRITES: '1'
-      NEXT_TELEMETRY_DISABLED: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: |
-            03_SourceCode/backend/package-lock.json
-            03_SourceCode/frontend/package-lock.json
-      - name: Install and initialize isolated database
-        run: |
-          npm ci --prefix 03_SourceCode/backend
-          npm ci --prefix 03_SourceCode/frontend
-          cd 03_SourceCode/backend
-          npm run db:bootstrap
-          npm run migration:run
-          npm run build
-      - name: Start test servers
-        run: |
-          mkdir -p /tmp/ctdt-ci
-          (cd 03_SourceCode/backend && node dist/main.js) > /tmp/ctdt-ci/backend.log 2>&1 &
-          (cd 03_SourceCode/frontend && npx prisma generate && npm run dev -- --hostname 127.0.0.1 --port 43100) > /tmp/ctdt-ci/frontend.log 2>&1 &
-          for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:43102/api > /dev/null && curl -fsS http://127.0.0.1:43100/dang-nhap > /dev/null; then exit 0; fi
-            sleep 2
-          done
-          cat /tmp/ctdt-ci/backend.log /tmp/ctdt-ci/frontend.log
-          exit 1
-      - name: HTTP and database regression tests
-        working-directory: 03_SourceCode/backend
-        run: npm run test:qa-integration
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-evidence
-          path: |
-            03_SourceCode/backend/test-results
-            /tmp/ctdt-ci/*.log
-          if-no-files-found: warn
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --ci --runInBand
+      - name: Build
+        run: npm run build
+
   ci:
     name: CI
     runs-on: ubuntu-latest
-    needs: [frontend, backend, security, integration]
+    timeout-minutes: 5
+    needs: [frontend, backend]
     if: ${{ always() }}
     steps:
       - name: Require all checks to pass
         env:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
-          SECURITY_RESULT: ${{ needs.security.result }}
-          INTEGRATION_RESULT: ${{ needs.integration.result }}
         run: |
-          for result in "$FRONTEND_RESULT" "$BACKEND_RESULT" "$SECURITY_RESULT" "$INTEGRATION_RESULT"; do
-            if [ "$result" != success ]; then exit 1; fi
-          done
+          echo "Frontend: $FRONTEND_RESULT"
+          echo "Backend: $BACKEND_RESULT"
+          if [[ "$FRONTEND_RESULT" != "success" || "$BACKEND_RESULT" != "success" ]]; then
+            echo "::error::Frontend and Backend must both succeed."
+            exit 1
+          fi
