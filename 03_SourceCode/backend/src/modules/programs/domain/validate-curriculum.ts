@@ -24,7 +24,7 @@ export function validateCurriculum(
       target > cents(program.rules.maxCredits)
     )
       issues.push(prefix + "tín chỉ vượt tối đa của bậc đào tạo.");
-    // CSDL.sql scopes prerequisite edges to curriculum entries; cycle checks belong here.
+    // The database schema scopes prerequisite edges to curriculum entries; cycle checks belong here.
     const courseById = new Map(
       track.courses.map((course) => [course.id, course]),
     );

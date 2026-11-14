@@ -16,7 +16,7 @@ COPY 03_SourceCode/backend/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/03_SourceCode/backend/dist ./dist
 COPY 03_SourceCode/backend/scripts/database ./scripts/database
-COPY 03_SourceCode/backend/src/core/database/CSDL.sql ./src/core/database/CSDL.sql
+COPY 03_SourceCode/backend/src/core/database/ctdt.sql ./src/core/database/ctdt.sql
 RUN mkdir -p storage/program-reviews && chown -R node:node /app
 USER node
 EXPOSE 3002
