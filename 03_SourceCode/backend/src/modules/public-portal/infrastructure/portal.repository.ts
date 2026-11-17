@@ -75,14 +75,22 @@ export class MysqlPortalRepository extends PortalRepository {
           [user.unitId],
         )
       : [];
-    return faculty
-      ? { mode: "FACULTY", facultyId: faculty.id, facultyName: faculty.name }
+    if (faculty)
+      return { mode: "FACULTY", facultyId: faculty.id, facultyName: faculty.name };
+    const [unit] = user.unitId
+      ? await manager.query(
+          "SELECT CAST(id AS CHAR) id,unit_name name FROM organizational_units WHERE id=? AND status='ACTIVE'",
+          [user.unitId],
+        )
+      : [];
+    return unit
+      ? { mode: "UNIT", facultyId: unit.id, facultyName: unit.name }
       : { mode: "UNASSIGNED", facultyId: null, facultyName: null };
   }
   private facultyFilter(view: { mode: string; facultyId: string | null }) {
     if (view.mode === "UNASSIGNED")
       return { sql: " AND 1=0", params: [] as string[] };
-    if (view.mode === "FACULTY")
+    if (["FACULTY", "UNIT"].includes(view.mode))
       return {
         sql: " AND (src.program_version_id IS NOT NULL OR EXISTS(SELECT 1 FROM organizational_unit_closure fc WHERE fc.ancestor_id=? AND fc.descendant_id=p.managing_unit_id))",
         params: [view.facultyId!],
@@ -134,7 +142,7 @@ export class MysqlPortalRepository extends PortalRepository {
       );
       if (!item)
         throw new NotFoundException(
-          "Chương trình chưa công bố hoặc không thuộc khoa của tài khoản.",
+          "Chương trình chưa công bố hoặc không thuộc đơn vị của tài khoản.",
         );
       const tracks = await manager.query(
         "SELECT CAST(id AS CHAR) id,track_code_snapshot code,track_name_snapshot name,required_total_credits credits FROM program_version_tracks WHERE program_version_id=? AND status='ACTIVE' ORDER BY id",

@@ -3,6 +3,7 @@ export interface FacultyInput {
   name: string;
   description: string;
   status: "ACTIVE" | "INACTIVE";
+  parentId?: string | null;
 }
 export interface FacultyItem extends FacultyInput {
   id: string;
