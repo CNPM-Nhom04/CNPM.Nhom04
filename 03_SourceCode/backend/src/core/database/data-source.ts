@@ -22,6 +22,7 @@ import { ThesisDefenses1793293200000 } from "./migrations/1793293200000-ThesisDe
 
 import { ThesisTopics1793340000000 } from "./migrations/1793340000000-ThesisTopics";
 import { Grades1793350800000 } from "./migrations/1793350800000-Grades";
+import { DoctoralThesisDefenseEligibility1794960000000 } from "./migrations/1794960000000-DoctoralThesisDefenseEligibility";
 export default new DataSource({
   type: "mysql",
   host: process.env.DB_HOST,
@@ -49,6 +50,7 @@ export default new DataSource({
     AdminReportExport1794200000000,
     TrainingSettingsScope1794300000000,
     TrainingAccountDisplayNames1794400000000,
+    DoctoralThesisDefenseEligibility1794960000000,
   ],
   migrationsTransactionMode: "none",
 });
