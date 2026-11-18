@@ -142,16 +142,29 @@ export async function adapterFor(
   if (resource === "faculties") {
     requirePermissions(account, ["MASTERDATA_MANAGE"], true);
     const service = new FacultyService(adminRepo);
+    const parents = await db.query(
+      "SELECT CAST(id AS CHAR) id,unit_code code,unit_name name FROM organizational_units WHERE status='ACTIVE' ORDER BY unit_name,id",
+    );
     const columns = [
       c("code", "Mã khoa"),
       c("name", "Tên khoa"),
       c("description", "Mô tả"),
       c("status", "Trạng thái", { choices: status, default: "ACTIVE" }),
-      c("parentName", "Đơn vị cha", { readonly: true }),
+      c("parentId", "Đơn vị cha", {
+        immutable: true,
+        default: "",
+        choices: [
+          { value: "", label: "Không có đơn vị cha" },
+          ...choices(parents, "id", (u) => u.code + " — " + u.name),
+        ],
+      }),
     ];
     return {
       title: "Khoa / đơn vị",
       columns,
+      notes: [
+        "Khoa mới: chọn Đơn vị cha từ danh sách, hoặc để trống nếu là đơn vị độc lập. Đơn vị cha của khoa đã có được giữ nguyên; tạo khoa mới không tự chuyển ngành hay CTĐT cũ.",
+      ],
       lock: adminLock,
       load: async () =>
         (
@@ -162,7 +175,7 @@ export async function adapterFor(
       validate: async (v, row) => ({
         ...(await checked(
           FacultyInputDto,
-          pick(v, ["code", "name", "description", "status"]),
+          pick(v, ["code", "name", "description", "status", "parentId"]),
         )),
         expectedUpdatedAt: row?.raw.updatedAt,
       }),

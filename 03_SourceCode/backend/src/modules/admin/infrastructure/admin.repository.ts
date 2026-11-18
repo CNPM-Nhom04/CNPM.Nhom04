@@ -263,6 +263,22 @@ export class MysqlAdminRepository extends AdminRepository {
         throw new ConflictException(
           "Khoa đã thay đổi. Tải lại danh sách trước khi sửa.",
         );
+      if (
+        old &&
+        input.parentId !== undefined &&
+        (input.parentId || null) !== old.parentId
+      )
+        throw new ConflictException(
+          "Không đổi đơn vị cha của khoa đã tạo; cần giữ nguyên cơ cấu và phạm vi dữ liệu.",
+        );
+      if (!old && input.parentId) {
+        const [parent] = await manager.query(
+          "SELECT id FROM organizational_units WHERE id=? AND status='ACTIVE' LOCK IN SHARE MODE",
+          [input.parentId],
+        );
+        if (!parent)
+          throw new BadRequestException("Chọn đơn vị cha đang hoạt động.");
+      }
       if (old)
         await manager.query(
           "UPDATE organizational_units SET unit_code=?,unit_name=?,description=?,status=? WHERE id=?",
@@ -270,8 +286,14 @@ export class MysqlAdminRepository extends AdminRepository {
         );
       else {
         const saved = await manager.query(
-          "INSERT INTO organizational_units(unit_code,unit_name,description,status,unit_type) VALUES(?,?,?,?,'FACULTY')",
-          [input.code, input.name, input.description, input.status],
+          "INSERT INTO organizational_units(unit_code,unit_name,description,status,unit_type,parent_id) VALUES(?,?,?,?,'FACULTY',?)",
+          [
+            input.code,
+            input.name,
+            input.description,
+            input.status,
+            input.parentId || null,
+          ],
         );
         id = String(saved.insertId);
       }

@@ -3,7 +3,7 @@ export interface PublicOptions {
   majors: { id: string; code: string; name: string; unitName: string }[];
 }
 export interface PublicCatalogView {
-  mode: "PUBLIC" | "FACULTY" | "ADMIN_ALL" | "UNASSIGNED";
+  mode: "PUBLIC" | "FACULTY" | "UNIT" | "ADMIN_ALL" | "UNASSIGNED";
   facultyId: string | null;
   facultyName: string | null;
 }

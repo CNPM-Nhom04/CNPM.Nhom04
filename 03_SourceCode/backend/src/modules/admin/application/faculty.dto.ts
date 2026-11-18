@@ -38,6 +38,13 @@ export class FacultyInputDto {
   @ApiProperty({ enum: ["ACTIVE", "INACTIVE"] })
   @IsIn(["ACTIVE", "INACTIVE"])
   status: "ACTIVE" | "INACTIVE";
+  @ApiPropertyOptional({
+    description: "Đơn vị cha khi tạo khoa; không đổi sau khi tạo",
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:|[1-9]\d{0,19})$/)
+  parentId?: string;
 }
 export class UpdateFacultyDto extends FacultyInputDto {
   @ApiProperty({ description: "updatedAt của bản đang xem" })

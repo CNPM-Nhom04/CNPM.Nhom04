@@ -188,8 +188,8 @@ function DegreePrograms({
           <BookOpen size={20} className="mt-1 shrink-0" />
           <p>
             {data?.view?.mode === "UNASSIGNED"
-              ? "Tài khoản chưa được gắn khoa; chưa thể xác định danh sách chương trình theo khoa."
-              : `Chưa có chương trình ${title.toLowerCase()} đã ban hành phù hợp${data?.view?.mode === "FACULTY" ? " trong khoa của bạn" : ""}.`}
+              ? "Tài khoản chưa được gắn đơn vị; chưa thể xác định danh sách chương trình theo đơn vị."
+              : `Chưa có chương trình ${title.toLowerCase()} đã ban hành phù hợp${data?.view?.mode === "FACULTY" ? " trong khoa của bạn" : data?.view?.mode === "UNIT" ? " trong đơn vị của bạn" : ""}.`}
           </p>
         </div>
       )}
@@ -262,25 +262,25 @@ export function PublicPrograms() {
         role="status"
         className="rounded-lg border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm leading-7 text-emerald-900"
       >
-        {view?.mode === "FACULTY" ? (
+        {view?.mode === "FACULTY" || view?.mode === "UNIT" ? (
           <>
             <strong>Chương trình của {view.facultyName}</strong>
             <p>
-              Danh sách được lọc theo khoa của tài khoản trong CSDL, gồm các
-              phiên bản đã ban hành.
+              Danh sách gồm CTĐT đã ban hành trong đơn vị của tài khoản và các
+              CTĐT nguồn công khai AGU.
             </p>
           </>
         ) : view?.mode === "UNASSIGNED" ? (
           <>
-            <strong>Tài khoản chưa được gắn khoa.</strong>
+            <strong>Tài khoản chưa được gắn đơn vị.</strong>
             <p>
               Liên hệ Admin để liên kết đơn vị hoặc hồ sơ học viên đúng người.
             </p>
           </>
         ) : view?.mode === "ADMIN_ALL" ? (
-          "Tài khoản quản trị không gắn khoa: đang xem CTĐT đã ban hành của tất cả khoa."
+          "Tài khoản quản trị không gắn đơn vị: đang xem CTĐT đã ban hành của tất cả đơn vị."
         ) : (
-          "Tra cứu công khai: hiển thị đầy đủ CTĐT đã ban hành ở hai bậc Thạc sĩ và Tiến sĩ. Khi đăng nhập, danh sách hiển thị theo khoa của tài khoản."
+          "Tra cứu công khai: hiển thị đầy đủ CTĐT đã ban hành ở hai bậc Thạc sĩ và Tiến sĩ cùng các CTĐT nguồn AGU. Khi đăng nhập, danh sách hiển thị theo đơn vị của tài khoản và nguồn công khai."
         )}
       </div>
       <DegreePrograms
